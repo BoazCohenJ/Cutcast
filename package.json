@@ -1,0 +1,62 @@
+{
+  "name": "podcast-autocut",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A simple local desktop app for lining up camera feeds and mic-linked clips.",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:main": "tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --external electron --watch --sourcemap",
+    "dev:electron": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 wait-on dist-electron/main.js tcp:5173 && electron dist-electron/main.js",
+    "build": "vite build && tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --external electron --sourcemap",
+    "start": "electron dist-electron/main.js",
+    "dist:win": "npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.12",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.0",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.podcastautocut.app",
+    "productName": "Podcast Autocut",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-renderer/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
