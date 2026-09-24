@@ -40,7 +40,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 960,
-    minWidth: 1100,
+    minWidth: 960,
     minHeight: 700,
     backgroundColor: '#15171c',
     title: 'Cutcast',
