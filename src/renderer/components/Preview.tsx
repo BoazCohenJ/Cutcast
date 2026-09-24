@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Project, Shot, Track } from '../../shared/types';
+import { soundSources, type Project, type Shot, type Track } from '../../shared/types';
 import { dbToGain, formatTime, mediaUrl } from '../lib/util';
 
 type Props = {
@@ -49,11 +49,12 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
   const clock = useRef({ wall: 0, time: 0 });
   const [failed, setFailed] = useState<Record<string, boolean>>({});
 
-  const tracks: Track[] = [...project.cameras, ...project.mics];
+  const sources = soundSources(project);
+  const tracks: Track[] = [...project.cameras, ...sources];
   const tracksRef = useRef(tracks);
   tracksRef.current = tracks;
-  const mics = useRef(project.mics);
-  mics.current = project.mics;
+  const mics = useRef(sources);
+  mics.current = sources;
 
   const register = (id: string) => (element: HTMLMediaElement | null) => {
     if (element) {
@@ -166,7 +167,7 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
             onError={() => setFailed((current) => ({ ...current, [camera.id]: true }))}
           />
         ))}
-        {project.mics.map((mic) => (
+        {sources.map((mic) => (
           <audio
             key={mic.id}
             ref={(element) => {

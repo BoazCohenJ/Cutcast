@@ -1,4 +1,4 @@
-import type { Camera, Mic, Project, Track } from '../../shared/types';
+import { soundSources, type Camera, type Mic, type Project, type Track } from '../../shared/types';
 import { fileName, formatTime } from '../lib/util';
 
 type Props = {
@@ -62,6 +62,8 @@ function OffsetControl({ track, onUpdate }: { track: Track; onUpdate: Props['onU
 
 export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, onAutoSync, onUpdate, onRemove, onRelink }: Props) {
   const importingPaths = Object.keys(importing);
+  const heardId = soundSources(project).find((source) => !source.muted)?.path;
+  const heardCamera = project.mics.length ? undefined : project.cameras.find((camera) => camera.path === heardId);
   const trackCount = project.cameras.length + project.mics.length;
 
   return (
@@ -100,7 +102,16 @@ export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, 
       ))}
 
       <h3>Microphones</h3>
-      {!project.mics.length ? <p className="muted small">No microphones yet. Add each person’s audio file.</p> : null}
+      {!project.mics.length ? (
+        heardCamera ? (
+          <p className="muted small">
+            No microphone files, so you’ll hear <strong>{heardCamera.name}</strong>’s own sound. For clearer sound and better cuts, add each
+            person’s mic recording.
+          </p>
+        ) : (
+          <p className="muted small">No microphones yet. Add each person’s audio file.</p>
+        )
+      ) : null}
       {project.mics.map((mic) => (
         <div className={`track-card ${mic.muted ? 'dimmed' : ''}`} key={mic.id}>
           <div className="track-title">

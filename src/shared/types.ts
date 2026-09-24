@@ -144,6 +144,29 @@ export const emptyProject = (): Project => ({
 
 export const trackEnd = (track: Track) => track.offsetSec + (track.info?.durationSec ?? 0);
 
+/**
+ * The tracks that provide sound and drive the cuts. Normally the mics; with no mic files, each camera's own
+ * audio stands in, so a camera-only project still has sound and still cuts. Only one camera is heard (the wide
+ * shot if there is one), because mixing several cameras filming the same room sounds echoey.
+ */
+export function soundSources(project: Project): Mic[] {
+  if (project.mics.length) {
+    return project.mics;
+  }
+  const cameras = project.cameras.filter((camera) => camera.info?.hasAudio);
+  const heard = cameras.find((camera) => camera.role === 'wide') ?? cameras[0];
+  return cameras.map((camera) => ({
+    id: `camera-audio:${camera.id}`,
+    path: camera.path,
+    name: `${camera.name} sound`,
+    offsetSec: camera.offsetSec,
+    info: camera.info,
+    cameraId: camera.role === 'speaker' ? camera.id : null,
+    volumeDb: 0,
+    muted: camera !== heard
+  }));
+}
+
 /** Full timeline span covered by any track. */
 export function timelineDuration(project: Project) {
   const tracks: Track[] = [...project.cameras, ...project.mics];

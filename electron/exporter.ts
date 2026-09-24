@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Camera, ExportProgress, ExportRequest, OutputSettings } from '../src/shared/types';
+import { soundSources, type Camera, type ExportProgress, type ExportRequest, type OutputSettings } from '../src/shared/types';
 import { CancelledError, runFfmpeg } from './ffmpeg';
 
 type Segment = {
@@ -85,7 +85,7 @@ function segmentArgs(segment: Segment, output: OutputSettings, target: string) {
 function audioArgs(request: ExportRequest, target: string) {
   const { project, startSec, endSec } = request;
   const duration = endSec - startSec;
-  const mics = project.mics.filter((mic) => !mic.muted && mic.info?.hasAudio);
+  const mics = soundSources(project).filter((mic) => !mic.muted && mic.info?.hasAudio);
   const inputs: string[] = [];
   const chains: string[] = [];
 
