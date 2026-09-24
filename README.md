@@ -13,7 +13,7 @@ with every microphone mixed underneath. It runs entirely on your own computer.
 [![Tests](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml/badge.svg)](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-38bdf8)
 
-<a href="https://github.com/BoazCohenJ/Cutcast/releases/download/v0.3.0/Cutcast-promo.mp4"><img src="docs/promo-thumbnail.jpg" alt="Watch the 30-second Cutcast trailer" width="720" /></a>
+https://github.com/user-attachments/assets/7e22c8d7-2897-4ca3-b2fe-3064c291b107
 
 <img src="docs/screenshot.png" alt="Cutcast: preview, cut settings and timeline" width="900" />
 
