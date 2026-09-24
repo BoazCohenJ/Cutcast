@@ -1,6 +1,6 @@
 {
   "name": "cutcast",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "Automatic multi-camera podcast editor: syncs cameras and mics by audio and cuts to whoever is talking.",
   "author": "BoazCohenJ",

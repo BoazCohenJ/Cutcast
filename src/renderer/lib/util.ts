@@ -1,6 +1,6 @@
 export const createId = () => Math.random().toString(36).slice(2, 10);
 
-export const CAMERA_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#4ade80', '#f472b6', '#facc15', '#fb7185'];
+export const CAMERA_COLORS = ['#a3e635', '#38bdf8', '#a78bfa', '#f472b6', '#2dd4bf', '#facc15', '#fb7185'];
 
 export const fileName = (filePath: string) => filePath.split(/[\\/]/).pop() ?? filePath;
 

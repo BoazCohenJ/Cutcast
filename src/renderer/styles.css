@@ -6,8 +6,8 @@
   --line: #2e3340;
   --text: #e7e9ee;
   --muted: #8b91a0;
-  --accent: #f59e0b;
-  --accent-text: #1a1204;
+  --accent: #a3e635;
+  --accent-text: #0f1a03;
   --danger: #f87171;
   --warn: #fbbf24;
   --tl-bg: #181b21;
@@ -755,7 +755,7 @@ kbd {
   place-items: center;
   font-size: 22px;
   font-weight: 600;
-  background: rgba(245, 158, 11, 0.12);
+  background: rgba(163, 230, 53, 0.12);
   border: 3px dashed var(--accent);
   pointer-events: none;
 }
