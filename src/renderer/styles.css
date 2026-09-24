@@ -230,6 +230,8 @@ kbd {
 .app {
   display: grid;
   grid-template-rows: 48px minmax(0, 1fr) auto;
+  /* Without this the column can't shrink below the timeline's last pixel width, cutting off the sidebar. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
 }
 
