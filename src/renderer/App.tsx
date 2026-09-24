@@ -1,336 +1,491 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { planShots } from '../shared/cutEngine';
+import { emptyProject, exportRange, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
+import { CutPanel } from './components/CutPanel';
+import { ExportDialog, HelpDialog, type ExportState } from './components/Dialogs';
+import { ExportPanel } from './components/ExportPanel';
+import { Preview, shotAt } from './components/Preview';
+import { SourcesPanel } from './components/SourcesPanel';
+import { Timeline } from './components/Timeline';
+import { addFiles, allTracks, autoSync, removeTrack, setOverride, updateTrack } from './lib/projectOps';
+import { useHistory } from './lib/useHistory';
+import { fileName, stripExtension } from './lib/util';
 
-type MediaSource = {
-  id: string;
-  kind: 'audio' | 'video';
-  path: string;
-  label: string;
-  offsetSec: number;
-};
+const api = window.desktopApi;
+type Tab = 'sources' | 'cuts' | 'export';
 
-type CameraFeed = {
-  id: string;
-  name: string;
-  videoPath: string;
-  videoOffsetSec: number;
-  sources: MediaSource[];
-};
-
-type OverrideBlock = {
-  id: string;
-  cameraId: string;
-  startSec: number;
-  endSec: number;
-};
-
-const createId = () => Math.random().toString(36).slice(2, 10);
-const formatSeconds = (value: number) => `${value.toFixed(1)}s`;
-const inferMediaKind = (filePath: string): MediaSource['kind'] => (filePath.match(/\.(mp4|mov|mkv|webm)$/i) ? 'video' : 'audio');
+/** ipcRenderer wraps errors as "Error invoking remote method 'x': Error: message". */
+const errorMessage = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
 export default function App() {
-  const [cameras, setCameras] = useState<CameraFeed[]>([]);
-  const [overrides, setOverrides] = useState<OverrideBlock[]>([]);
-  const [outputPath, setOutputPath] = useState('');
-  const [status, setStatus] = useState('Ready. Add a camera to begin.');
+  const history = useHistory<Project>(emptyProject());
+  const project = history.state;
+  const setProject = history.set;
+  const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [savedProject, setSavedProject] = useState<Project>(project);
+  const [analyses, setAnalyses] = useState<ReadonlyMap<string, MediaAnalysis>>(new Map());
+  const [importing, setImporting] = useState<Record<string, number>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [playhead, setPlayhead] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [tab, setTab] = useState<Tab>('sources');
+  const [encoders, setEncoders] = useState<string[]>(['libx264']);
+  const [exportState, setExportState] = useState<ExportState | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const restored = useRef(false);
+  const [ready, setReady] = useState(false);
 
-  const totalDurationSec = useMemo(() => {
-    const allVideoOffsets = cameras.map((camera) => camera.videoOffsetSec);
-    const allAudioOffsets = cameras.flatMap((camera) => camera.sources.map((source) => source.offsetSec));
-    return Math.max(0, ...allVideoOffsets, ...allAudioOffsets);
-  }, [cameras]);
+  const duration = timelineDuration(project);
+  const dirty = project !== savedProject && allTracks(project).length > 0;
 
-  const addCamera = async () => {
-    const mediaPaths = await window.desktopApi.openMediaFiles();
-    if (!mediaPaths.length) {
-      return;
-    }
-
-    const nextCamera = mediaPaths[0];
-    setCameras((current) => [
-      ...current,
-      {
-        id: createId(),
-        name: `Camera ${current.length + 1}`,
-        videoPath: nextCamera,
-        videoOffsetSec: 0,
-        sources: [
-          {
-            id: createId(),
-            kind: inferMediaKind(nextCamera),
-            path: nextCamera,
-            label: 'Primary source',
-            offsetSec: 0
-          } satisfies MediaSource
-        ]
+  const micEnvelopes = useMemo(() => {
+    const map = new Map<string, Float32Array>();
+    for (const mic of project.mics) {
+      const envelope = analyses.get(mic.path)?.envelope;
+      if (envelope?.length) {
+        map.set(mic.id, envelope);
       }
-    ]);
-    setStatus('Camera added. Use the bars below to line up the clips.');
-  };
-
-  const addAudioToCamera = async (cameraId: string) => {
-    const mediaPaths = await window.desktopApi.openMediaFiles();
-    if (!mediaPaths.length) {
-      return;
     }
+    return map;
+  }, [project.mics, analyses]);
 
-    setCameras((current) =>
-      current.map((camera) =>
-        camera.id === cameraId
-          ? {
-              ...camera,
-              sources: [
-                ...camera.sources,
-                ...mediaPaths.map((mediaPath): MediaSource => ({
-                  id: createId(),
-                  kind: inferMediaKind(mediaPath),
-                  path: mediaPath,
-                  label: `Mic ${camera.sources.length + 1}`,
-                  offsetSec: 0
-                }))
-              ]
-            }
-          : camera
-      )
+  const shots = useMemo(() => planShots(project, micEnvelopes), [project, micEnvelopes]);
+  const currentShot = shotAt(shots, Math.min(playhead, Math.max(0, duration - 1e-3)));
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast((current) => (current === message ? null : current)), 4000);
+  }, []);
+
+  /** Analyse files (cached on disk after the first time) and keep their info and loudness envelopes. */
+  const analyzePaths = useCallback(async (paths: string[]) => {
+    setImporting((current) => ({ ...current, ...Object.fromEntries(paths.map((path) => [path, 0])) }));
+    const results = await Promise.all(
+      paths.map(async (path) => {
+        try {
+          const analysis = await api.analyze(path);
+          setErrors(({ [path]: _removed, ...rest }) => rest);
+          return { path, analysis };
+        } catch (error) {
+          setErrors((current) => ({ ...current, [path]: errorMessage(error) }));
+          return null;
+        } finally {
+          setImporting(({ [path]: _done, ...rest }) => rest);
+        }
+      })
     );
-    setStatus('Audio source linked to the camera.');
-  };
-
-  const chooseOutput = async () => {
-    const filePath = await window.desktopApi.chooseSaveFile();
-    if (filePath) {
-      setOutputPath(filePath);
-      setStatus(`Output file selected: ${filePath}`);
+    const ok = results.filter((result): result is { path: string; analysis: MediaAnalysis } => result !== null);
+    const next = new Map(analyses);
+    for (const { path, analysis } of ok) {
+      next.set(path, analysis);
     }
-  };
+    setAnalyses((current) => {
+      const merged = new Map(current);
+      ok.forEach(({ path, analysis }) => merged.set(path, analysis));
+      return merged;
+    });
+    return { ok, all: next };
+  }, [analyses]);
 
-  const exportVideo = async () => {
-    if (!outputPath) {
-      setStatus('Pick an output file first.');
+  const importFiles = useCallback(async (paths: string[]) => {
+    const known = new Set(allTracks(history.ref.current).map((track) => track.path));
+    const fresh = [...new Set(paths)].filter((path) => !known.has(path));
+    if (!fresh.length) {
+      return;
+    }
+    const { ok, all } = await analyzePaths(fresh);
+    const skipped = ok.filter(({ analysis }) => !analysis.hasVideo && !analysis.hasAudio);
+    if (skipped.length) {
+      showToast(`${skipped.map(({ path }) => fileName(path)).join(', ')} has no video or sound.`);
+    }
+    if (!ok.length) {
       return;
     }
 
-    setStatus('Exporting. This can take a bit on longer clips.');
+    setSyncing(true);
+    // Let the "Syncing…" state paint before the (brief) number crunching.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    setProject((current) => {
+      const before = new Set(allTracks(current).map((track) => track.id));
+      const withFiles = addFiles(current, ok);
+      const added = new Set(allTracks(withFiles).map((track) => track.id).filter((id) => !before.has(id)));
+      return allTracks(withFiles).length > 1 ? autoSync(withFiles, all, before.size ? added : undefined) : withFiles;
+    });
+    setSyncing(false);
+    setTab('sources');
+  }, [analyzePaths, history.ref, setProject, showToast]);
+
+  const loadProject = useCallback(async (next: Project, path: string | null, markSaved: boolean) => {
+    history.reset(next);
+    setProjectPath(path);
+    setSavedProject(markSaved ? next : emptyProject());
+    setPlayhead(0);
+    setPlaying(false);
+    setErrors({});
+    await analyzePaths([...new Set(allTracks(next).map((track) => track.path))]);
+  }, [analyzePaths, history]);
+
+  // Startup: restore the last session and find out which hardware encoders work.
+  useEffect(() => {
+    if (restored.current) {
+      return;
+    }
+    restored.current = true;
+    void api.encoders().then(setEncoders).catch(() => undefined);
+    void api
+      .restore()
+      .then((session) => {
+        if (session && allTracks(session.project).length) {
+          void loadProject(session.project, session.projectPath, false);
+          showToast('Picked up where you left off.');
+        }
+      })
+      .finally(() => setReady(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => api.onAnalyzeProgress((path, fraction) => setImporting((current) => (path in current ? { ...current, [path]: fraction } : current))), []);
+
+  // Autosave so a crash or accidental close never loses work.
+  useEffect(() => {
+    if (!ready) {
+      // Don't overwrite the last session before it has been restored.
+      return;
+    }
+    const timer = setTimeout(() => void api.autosave(project, projectPath), 800);
+    return () => clearTimeout(timer);
+  }, [project, projectPath, ready]);
+
+  useEffect(() => {
+    const name = projectPath ? stripExtension(fileName(projectPath)) : 'Untitled';
+    document.title = `${name}${dirty ? ' •' : ''} · Podcast Autocut`;
+  }, [projectPath, dirty]);
+
+  const save = useCallback(async (saveAs = false) => {
+    const current = history.ref.current;
     try {
-      const exportedPath = await window.desktopApi.exportProject({ cameras, overrides, totalDurationSec, outputPath });
-      setStatus(`Export finished: ${exportedPath}`);
+      const path = await api.saveProject(current, saveAs ? null : projectPath);
+      if (path) {
+        setProjectPath(path);
+        setSavedProject(current);
+        showToast('Project saved.');
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Export failed.');
+      showToast(`Couldn’t save: ${errorMessage(error)}`);
     }
-  };
+  }, [history.ref, projectPath, showToast]);
 
-  const updateCamera = (cameraId: string, patch: Partial<CameraFeed>) => {
-    setCameras((current) => current.map((camera) => (camera.id === cameraId ? { ...camera, ...patch } : camera)));
-  };
+  const confirmDiscard = () => !dirty || window.confirm('You have unsaved changes. Continue without saving?');
 
-  const updateSource = (cameraId: string, sourceId: string, patch: Partial<MediaSource>) => {
-    setCameras((current) =>
-      current.map((camera) =>
-        camera.id === cameraId
-          ? {
-              ...camera,
-              sources: camera.sources.map((source) => (source.id === sourceId ? { ...source, ...patch } : source))
-            }
-          : camera
-      )
-    );
-  };
-
-  const removeCamera = (cameraId: string) => {
-    setCameras((current) => current.filter((camera) => camera.id !== cameraId));
-    setOverrides((current) => current.filter((override) => override.cameraId !== cameraId));
-  };
-
-  const addOverride = () => {
-    const firstCamera = cameras[0];
-    if (!firstCamera) {
-      setStatus('Add a camera before creating a manual override.');
+  const openProject = async () => {
+    if (!confirmDiscard()) {
       return;
     }
-
-    setOverrides((current) => [
-      ...current,
-      {
-        id: createId(),
-        cameraId: firstCamera.id,
-        startSec: 0,
-        endSec: 10
+    try {
+      const result = await api.openProject();
+      if (result) {
+        await loadProject(result.project, result.path, true);
       }
-    ]);
+    } catch (error) {
+      showToast(errorMessage(error));
+    }
   };
+
+  const newProject = () => {
+    if (!confirmDiscard()) {
+      return;
+    }
+    const fresh = emptyProject();
+    history.reset(fresh);
+    setSavedProject(fresh);
+    setProjectPath(null);
+    setPlayhead(0);
+    setPlaying(false);
+    setErrors({});
+  };
+
+  const addFilesFromDialog = async () => importFiles(await api.openMedia());
+
+  const runAutoSync = async () => {
+    setSyncing(true);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    setProject((current) => autoSync(current, analyses));
+    setSyncing(false);
+    showToast('Files lined up by their sound. Press play to check.');
+  };
+
+  const relink = async (track: Track) => {
+    const [path] = await api.openMedia();
+    if (!path) {
+      return;
+    }
+    setProject((current) => ({
+      ...current,
+      cameras: current.cameras.map((camera) => (camera.path === track.path ? { ...camera, path } : camera)),
+      mics: current.mics.map((mic) => (mic.path === track.path ? { ...mic, path } : mic))
+    }));
+    setErrors(({ [track.path]: _removed, ...rest }) => rest);
+    await analyzePaths([path]);
+  };
+
+  const seek = useCallback((seconds: number) => setPlayhead(Math.max(0, Math.min(duration, seconds))), [duration]);
+
+  const forceCamera = useCallback((cameraId: string | null) => {
+    const shot = shots[currentShot];
+    if (!shot) {
+      return;
+    }
+    setProject((current) => setOverride(current, shot.startSec, shot.endSec, cameraId));
+  }, [currentShot, setProject, shots]);
+
+  const startExport = async () => {
+    const current = history.ref.current;
+    const range = exportRange(current);
+    const suggested = `${projectPath ? stripExtension(fileName(projectPath)) : 'Podcast'}.mp4`;
+    const outputPath = await api.chooseExportPath(suggested);
+    if (!outputPath) {
+      return;
+    }
+    setPlaying(false);
+    setExportState({ status: 'running', outputPath, progress: { stage: 'video', progress: 0, message: 'Getting started' } });
+    const unsubscribe = api.onExportProgress((progress) =>
+      setExportState((state) => (state?.status === 'running' ? { ...state, progress } : state))
+    );
+    try {
+      await api.startExport({ project: current, shots, startSec: range.start, endSec: range.end, outputPath });
+      setExportState({ status: 'done', outputPath });
+    } catch (error) {
+      const message = errorMessage(error);
+      setExportState(/cancelled/i.test(message) ? null : { status: 'error', message });
+    } finally {
+      unsubscribe();
+    }
+  };
+
+  // Keyboard shortcuts.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (exportState || helpOpen || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
+        return;
+      }
+      if (target.tagName === 'BUTTON' && event.key === ' ') {
+        // Don't let Space both "click" the focused button and toggle playback.
+        target.blur();
+      }
+      const ctrl = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+
+      if (ctrl && key === 'z' && !event.shiftKey) {
+        history.undo();
+      } else if (ctrl && (key === 'y' || (key === 'z' && event.shiftKey))) {
+        history.redo();
+      } else if (ctrl && key === 's') {
+        void save(event.shiftKey);
+      } else if (ctrl && key === 'o') {
+        void openProject();
+      } else if (ctrl) {
+        return;
+      } else if (event.key === ' ') {
+        setPlaying((value) => !value && duration > 0);
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        const step = (event.shiftKey ? 5 : 1) * (event.key === 'ArrowLeft' ? -1 : 1);
+        seek(playhead + step);
+      } else if (event.key === '[') {
+        const shot = shots[currentShot];
+        const index = shot && playhead - shot.startSec < 0.3 ? currentShot - 1 : currentShot;
+        seek(shots[Math.max(0, index)]?.startSec ?? 0);
+      } else if (event.key === ']') {
+        const next = shots[currentShot + 1];
+        if (next) {
+          seek(next.startSec);
+        }
+      } else if (/^[1-9]$/.test(event.key)) {
+        const camera = project.cameras[Number(event.key) - 1];
+        if (camera) {
+          forceCamera(camera.id);
+        }
+      } else if (event.key === '0') {
+        forceCamera(null);
+      } else if (key === 'i') {
+        setProject((current) => ({ ...current, inSec: playhead }));
+      } else if (key === 'o') {
+        setProject((current) => ({ ...current, outSec: playhead }));
+      } else if (event.key === 'Home') {
+        seek(0);
+      } else if (event.key === 'End') {
+        seek(duration);
+      } else {
+        return;
+      }
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Drag and drop files anywhere on the window.
+  const onDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setDragging(false);
+    const files = Array.from(event.dataTransfer.files);
+    const projectFile = files.find((file) => file.name.toLowerCase().endsWith('.podcut'));
+    if (projectFile) {
+      showToast('Use Open to load a project file.');
+      return;
+    }
+    void importFiles(files.map((file) => api.pathForFile(file)).filter(Boolean));
+  };
+
+  const hasTracks = allTracks(project).length > 0;
 
   return (
-    <div className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Local desktop editor</p>
-          <h1>Podcast Autocut</h1>
-          <p className="lede">
-            Add one camera per row, link any number of mic or video files to it, line them up on the native timeline,
-            and export one finished MP4.
-          </p>
+    <div
+      className="app"
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) {
+          setDragging(false);
+        }
+      }}
+      onDrop={onDrop}
+    >
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo">●</span> Podcast Autocut
+          <span className="project-name">
+            {projectPath ? stripExtension(fileName(projectPath)) : 'Untitled'}
+            {dirty ? ' •' : ''}
+          </span>
         </div>
-        <div className="hero-actions">
-          <button className="secondary" onClick={() => void window.desktopApi.showHelp()}>
-            Simple guide
-          </button>
-          <button onClick={addCamera}>Add camera</button>
+        <div className="topbar-actions">
+          <button className="ghost" onClick={newProject}>New</button>
+          <button className="ghost" onClick={() => void openProject()}>Open…</button>
+          <button className="ghost" onClick={() => void save()} title="Ctrl+S">Save</button>
+          <span className="divider" />
+          <button className="ghost icon" onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">↶</button>
+          <button className="ghost icon" onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Y)">↷</button>
+          <span className="divider" />
+          <button className="ghost" onClick={() => setHelpOpen(true)}>Help</button>
+          <button onClick={() => setTab('export')} disabled={!project.cameras.length}>Export</button>
         </div>
       </header>
 
-      <section className="status-bar">
-        <span>{status}</span>
-        <span>{cameras.length} cameras</span>
-        <span>{formatSeconds(totalDurationSec)}</span>
-      </section>
-
-      <section className="workspace">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Timeline</h2>
-            <div className="panel-actions">
-              <button className="secondary" onClick={addOverride}>Force camera section</button>
-              <button className="secondary" onClick={chooseOutput}>Pick save location</button>
-              <button onClick={exportVideo}>Make video</button>
-            </div>
-          </div>
-
-          <div className="timeline-ruler">
-            {Array.from({ length: 13 }).map((_, index) => (
-              <span key={index}>{index * 10}s</span>
-            ))}
-          </div>
-
-          <div className="camera-list">
-            {cameras.map((camera, cameraIndex) => (
-              <article className="camera-card" key={camera.id}>
-                <div className="camera-topline">
-                  <input
-                    className="camera-name"
-                    value={camera.name}
-                    onChange={(event) => updateCamera(camera.id, { name: event.target.value })}
-                  />
-                  <div className="camera-buttons">
-                    <button className="secondary" onClick={() => void addAudioToCamera(camera.id)}>
-                      Add sound file
-                    </button>
-                    <button className="danger" onClick={() => removeCamera(camera.id)}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-
-                <div className="camera-meta">
-                  <span>{camera.videoPath}</span>
-                </div>
-
-                <div className="clip-strip">
-                  <label>
-                    Video offset {formatSeconds(camera.videoOffsetSec)}
-                    <input
-                      type="range"
-                      min="0"
-                      max="300"
-                      step="0.5"
-                      value={camera.videoOffsetSec}
-                      onChange={(event) => updateCamera(camera.id, { videoOffsetSec: Number(event.target.value) })}
-                    />
-                  </label>
-
-                  {camera.sources.map((source, sourceIndex) => (
-                    <div className="source-row" key={source.id}>
-                      <input
-                        value={source.label}
-                        onChange={(event) => updateSource(camera.id, source.id, { label: event.target.value })}
-                      />
-                      <span>{source.kind}</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="300"
-                        step="0.5"
-                        value={source.offsetSec}
-                        onChange={(event) => updateSource(camera.id, source.id, { offsetSec: Number(event.target.value) })}
-                      />
-                      <span>{formatSeconds(source.offsetSec)}</span>
-                      <span className="source-path">{source.path}</span>
-                      <span className="source-order">#{cameraIndex + 1}.{sourceIndex + 1}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <aside className="panel narrow">
-          <h2>Manual override</h2>
-          <p className="help-copy">
-            Use this when you want one camera to stay on screen for a section. Otherwise the app follows the loudest
-            linked sound track.
-          </p>
-
-          {overrides.map((override) => (
-            <div className="override-row" key={override.id}>
-              <select
-                value={override.cameraId}
-                onChange={(event) =>
-                  setOverrides((current) =>
-                    current.map((item) => (item.id === override.id ? { ...item, cameraId: event.target.value } : item))
-                  )
-                }
-              >
-                {cameras.map((camera) => (
-                  <option key={camera.id} value={camera.id}>
-                    {camera.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={override.startSec}
-                onChange={(event) =>
-                  setOverrides((current) =>
-                    current.map((item) => (item.id === override.id ? { ...item, startSec: Number(event.target.value) } : item))
-                  )
-                }
+      {hasTracks || Object.keys(importing).length ? (
+        <>
+          <main className="workspace">
+            <section className="stage">
+              <Preview
+                project={project}
+                shots={shots}
+                duration={duration}
+                playhead={playhead}
+                playing={playing}
+                onTime={setPlayhead}
+                onPlayingChange={setPlaying}
               />
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={override.endSec}
-                onChange={(event) =>
-                  setOverrides((current) =>
-                    current.map((item) => (item.id === override.id ? { ...item, endSec: Number(event.target.value) } : item))
-                  )
-                }
-              />
+            </section>
+            <aside className="sidebar">
+              <nav className="tabs">
+                <button className={tab === 'sources' ? 'active' : ''} onClick={() => setTab('sources')}>Files & sync</button>
+                <button className={tab === 'cuts' ? 'active' : ''} onClick={() => setTab('cuts')}>Cuts</button>
+                <button className={tab === 'export' ? 'active' : ''} onClick={() => setTab('export')}>Export</button>
+              </nav>
+              {tab === 'sources' ? (
+                <SourcesPanel
+                  project={project}
+                  importing={importing}
+                  errors={errors}
+                  syncing={syncing}
+                  onAddFiles={() => void addFilesFromDialog()}
+                  onAutoSync={() => void runAutoSync()}
+                  onUpdate={(id, patch) => setProject((current) => updateTrack(current, id, patch))}
+                  onRemove={(id) => setProject((current) => removeTrack(current, id))}
+                  onRelink={(track) => void relink(track)}
+                />
+              ) : null}
+              {tab === 'cuts' ? (
+                <CutPanel
+                  project={project}
+                  shots={shots}
+                  currentShot={currentShot}
+                  playhead={playhead}
+                  onChangeCut={(patch) => setProject((current) => ({ ...current, cut: { ...current.cut, ...patch } }))}
+                  onForce={forceCamera}
+                  onUpdateOverride={(id, patch) =>
+                    setProject((current) => ({ ...current, overrides: current.overrides.map((item) => (item.id === id ? { ...item, ...patch } : item)) }))
+                  }
+                  onRemoveOverride={(id) => setProject((current) => ({ ...current, overrides: current.overrides.filter((item) => item.id !== id) }))}
+                  onSeek={seek}
+                />
+              ) : null}
+              {tab === 'export' ? (
+                <ExportPanel
+                  project={project}
+                  playhead={playhead}
+                  encoders={encoders}
+                  onChangeOutput={(patch) => setProject((current) => ({ ...current, output: { ...current.output, ...patch } }))}
+                  onSetRange={(patch) => setProject((current) => ({ ...current, ...patch }))}
+                  onExport={() => void startExport()}
+                />
+              ) : null}
+            </aside>
+          </main>
+          <Timeline
+            project={project}
+            shots={shots}
+            analyses={analyses}
+            duration={duration}
+            playhead={playhead}
+            playing={playing}
+            selectedShot={currentShot}
+            onSeek={seek}
+            onSelectShot={() => setTab('cuts')}
+            onOffsetDrag={(id, offsetSec, phase) => {
+              if (phase === 'start') {
+                history.checkpoint();
+              } else {
+                setProject((current) => updateTrack(current, id, { offsetSec, syncConfidence: undefined }), { transient: true });
+              }
+            }}
+          />
+        </>
+      ) : (
+        <main className="welcome">
+          <div className="drop-card">
+            <div className="drop-icon">⬇</div>
+            <h1>Drop your recordings here</h1>
+            <p>All camera videos and microphone files from one episode. They get sorted and synced automatically.</p>
+            <div className="button-row center">
+              <button onClick={() => void addFilesFromDialog()}>Choose files…</button>
+              <button className="secondary" onClick={() => void openProject()}>Open a project…</button>
             </div>
-          ))}
-
-          <button className="secondary full-width" onClick={() => setHelpOpen(true)}>
-            Open simple guide
-          </button>
-        </aside>
-      </section>
-
-      {helpOpen ? (
-        <div className="modal-backdrop" onClick={() => setHelpOpen(false)}>
-          <div className="help-modal" onClick={(event) => event.stopPropagation()}>
-            <h2>Simple guide</h2>
-            <ol>
-              <li>Add one camera for each angle you want.</li>
-              <li>Attach one or more sound files or video files to that camera.</li>
-              <li>Move the sliders until the clips line up.</li>
-              <li>Use the force-camera section if you want a camera to stay on screen.</li>
-              <li>Pick where to save it, then click Make video.</li>
+            <ol className="steps compact">
+              <li>Add your cameras and mics</li>
+              <li>Check the automatic cuts</li>
+              <li>Export one finished video</li>
             </ol>
-            <button onClick={() => setHelpOpen(false)}>Close</button>
           </div>
-        </div>
+        </main>
+      )}
+
+      {dragging ? <div className="drop-overlay">Drop to add files</div> : null}
+      {toast ? <div className="toast">{toast}</div> : null}
+      {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
+      {exportState ? (
+        <ExportDialog
+          state={exportState}
+          onCancel={() => void api.cancelExport()}
+          onClose={() => setExportState(null)}
+          onReveal={(path) => void api.showItemInFolder(path)}
+        />
       ) : null}
     </div>
   );
