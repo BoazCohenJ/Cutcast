@@ -9,7 +9,7 @@
 Cutcast lines up every recording by its sound, cuts to whoever is talking, and exports one finished MP4
 with every microphone mixed underneath. It runs entirely on your own computer.
 
-[![Download](https://img.shields.io/github/v/release/BoazCohenJ/Cutcast?label=download&color=f59e0b)](https://github.com/BoazCohenJ/Cutcast/releases/latest)
+[![Download](https://img.shields.io/github/v/release/BoazCohenJ/Cutcast?label=download&color=a3e635)](https://github.com/BoazCohenJ/Cutcast/releases/latest)
 [![Tests](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml/badge.svg)](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-38bdf8)
 
