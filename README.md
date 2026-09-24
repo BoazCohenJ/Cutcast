@@ -79,6 +79,11 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 **What files does it accept?**
 Video: MP4, MOV, MKV, WebM, M4V, AVI. Audio: WAV, MP3, M4A, AAC, FLAC, OGG, Opus, AIFF.
 
+**Do I need separate microphone files?**
+No, but they help a lot. With only camera videos, Cutcast uses the cameras' own sound: you hear the wide camera (or the
+first camera), and every camera's audio is used to decide the cuts. Each person's own mic gives clearer sound and more
+accurate cuts.
+
 **Does anything get uploaded?**
 No. All analysis and rendering happens on your computer with a bundled copy of ffmpeg.
 

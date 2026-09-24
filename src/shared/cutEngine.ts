@@ -1,4 +1,4 @@
-import { ENVELOPE_RATE, type Camera, type Mic, type Project, type Shot, timelineDuration, trackEnd } from './types';
+import { ENVELOPE_RATE, soundSources, type Camera, type Mic, type Project, type Shot, timelineDuration, trackEnd } from './types';
 
 /** Decisions are made on a 10 Hz grid. */
 export const STEP_SEC = 0.1;
@@ -299,7 +299,7 @@ export function planShots(project: Project, envelopes: Envelopes): Shot[] {
   const { cut } = project;
 
   const activity = analyzeMics(
-    project.mics.filter((mic) => envelopes.has(mic.id)),
+    soundSources(project).filter((mic) => envelopes.has(mic.id)),
     envelopes,
     steps,
     cut.sensitivity
