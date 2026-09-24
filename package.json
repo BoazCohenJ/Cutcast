@@ -3,6 +3,12 @@
   "version": "0.2.0",
   "private": true,
   "description": "Automatic multi-camera podcast editor: syncs cameras and mics by audio and cuts to whoever is talking.",
+  "author": "BoazCohenJ",
+  "homepage": "https://github.com/BoazCohenJ/Podcast_Autocut",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BoazCohenJ/Podcast_Autocut.git"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:electron\"",
@@ -53,7 +59,8 @@
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": true,
