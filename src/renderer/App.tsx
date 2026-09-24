@@ -162,7 +162,7 @@ export default function App() {
 
   useEffect(() => {
     const name = projectPath ? stripExtension(fileName(projectPath)) : 'Untitled';
-    document.title = `${name}${dirty ? ' •' : ''} · Podcast Autocut`;
+    document.title = `${name}${dirty ? ' •' : ''} · Cutcast`;
   }, [projectPath, dirty]);
 
   const save = useCallback(async (saveAs = false) => {
@@ -333,7 +333,7 @@ export default function App() {
     event.preventDefault();
     setDragging(false);
     const files = Array.from(event.dataTransfer.files);
-    const projectFile = files.find((file) => file.name.toLowerCase().endsWith('.podcut'));
+    const projectFile = files.find((file) => file.name.toLowerCase().endsWith('.cutcast'));
     if (projectFile) {
       showToast('Use Open to load a project file.');
       return;
@@ -359,7 +359,7 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <span className="logo">●</span> Podcast Autocut
+          <span className="logo">●</span> Cutcast
           <span className="project-name">
             {projectPath ? stripExtension(fileName(projectPath)) : 'Untitled'}
             {dirty ? ' •' : ''}

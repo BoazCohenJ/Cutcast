@@ -8,7 +8,7 @@ import { ExportJob } from './exporter';
 import { analyzeMedia, detectEncoders } from './media';
 
 const MEDIA_EXTENSIONS = ['mp4', 'mov', 'mkv', 'webm', 'm4v', 'avi', 'mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'aif', 'aiff'];
-const PROJECT_EXTENSION = 'podcut';
+const PROJECT_EXTENSION = 'cutcast';
 
 const MIME_TYPES: Record<string, string> = {
   '.mp4': 'video/mp4',
@@ -43,7 +43,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: '#15171c',
-    title: 'Podcast Autocut',
+    title: 'Cutcast',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -131,7 +131,7 @@ function registerIpc() {
   ipcMain.handle('project:open', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       properties: ['openFile'],
-      filters: [{ name: 'Podcast Autocut project', extensions: [PROJECT_EXTENSION] }]
+      filters: [{ name: 'Cutcast project', extensions: [PROJECT_EXTENSION] }]
     });
     if (result.canceled || !result.filePaths[0]) {
       return null;
@@ -145,7 +145,7 @@ function registerIpc() {
     if (!target) {
       const result = await dialog.showSaveDialog(mainWindow!, {
         defaultPath: `My podcast.${PROJECT_EXTENSION}`,
-        filters: [{ name: 'Podcast Autocut project', extensions: [PROJECT_EXTENSION] }]
+        filters: [{ name: 'Cutcast project', extensions: [PROJECT_EXTENSION] }]
       });
       if (result.canceled || !result.filePath) {
         return null;

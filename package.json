@@ -1,13 +1,13 @@
 {
-  "name": "podcast-autocut",
-  "version": "0.2.0",
+  "name": "cutcast",
+  "version": "0.3.0",
   "private": true,
   "description": "Automatic multi-camera podcast editor: syncs cameras and mics by audio and cuts to whoever is talking.",
   "author": "BoazCohenJ",
-  "homepage": "https://github.com/BoazCohenJ/Podcast_Autocut",
+  "homepage": "https://github.com/BoazCohenJ/Cutcast",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BoazCohenJ/Podcast_Autocut.git"
+    "url": "https://github.com/BoazCohenJ/Cutcast.git"
   },
   "main": "dist-electron/main.js",
   "scripts": {
@@ -42,8 +42,8 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.podcastautocut.app",
-    "productName": "Podcast Autocut",
+    "appId": "com.cutcast.app",
+    "productName": "Cutcast",
     "directories": {
       "output": "release"
     },
@@ -67,20 +67,20 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Podcast.Autocut.Setup.${version}.${ext}"
+      "artifactName": "Cutcast.Setup.${version}.${ext}"
     },
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
     ],
     "fileAssociations": [
       {
-        "ext": "podcut",
-        "name": "Podcast Autocut project",
+        "ext": "cutcast",
+        "name": "Cutcast project",
         "role": "Editor"
       }
     ],
     "portable": {
-      "artifactName": "Podcast.Autocut.${version}.${ext}"
+      "artifactName": "Cutcast.${version}.${ext}"
     }
   }
 }
