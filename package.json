@@ -66,7 +66,8 @@
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "Podcast.Autocut.Setup.${version}.${ext}"
     },
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
@@ -77,6 +78,9 @@
         "name": "Podcast Autocut project",
         "role": "Editor"
       }
-    ]
+    ],
+    "portable": {
+      "artifactName": "Podcast.Autocut.${version}.${ext}"
+    }
   }
 }

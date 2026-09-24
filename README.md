@@ -23,8 +23,8 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 
 | File | What it is |
 | --- | --- |
-| `Podcast Autocut Setup x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts. |
-| `Podcast Autocut x.y.z.exe` | Portable. Nothing to install; just run it. |
+| `Podcast.Autocut.Setup.x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts. |
+| `Podcast.Autocut.x.y.z.exe` | Portable. Nothing to install; just run it. |
 
 > Windows may show a *SmartScreen* warning because the app isn't code-signed yet. Click **More info → Run anyway**.
 
