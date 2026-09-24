@@ -1,17 +1,19 @@
 {
   "name": "podcast-autocut",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "A simple local desktop app for lining up camera feeds and mic-linked clips.",
+  "description": "Automatic multi-camera podcast editor: syncs cameras and mics by audio and cuts to whoever is talking.",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:electron\"",
     "dev:renderer": "vite",
     "dev:main": "tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --external electron --watch --sourcemap",
-    "dev:electron": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 wait-on dist-electron/main.js tcp:5173 && electron dist-electron/main.js",
-    "build": "vite build && tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --external electron --sourcemap",
-    "start": "electron dist-electron/main.js",
-    "dist:win": "npm run build && electron-builder --win --x64"
+    "dev:electron": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 wait-on dist-electron/main.js tcp:5173 && electron .",
+    "build": "tsc --noEmit && vite build && tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --external electron --sourcemap",
+    "start": "electron .",
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",
@@ -30,6 +32,7 @@
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vite": "^7.1.0",
+    "vitest": "^3.2.7",
     "wait-on": "^8.0.3"
   },
   "build": {
@@ -57,6 +60,16 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    }
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "podcut",
+        "name": "Podcast Autocut project",
+        "role": "Editor"
+      }
+    ]
   }
 }
