@@ -153,7 +153,7 @@ export class ExportJob {
       throw new Error('Nothing to export. Add a camera and make sure the export range isn’t empty.');
     }
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'podcast-autocut-'));
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cutcast-'));
     try {
       await this.renderVideo(segments, tempDir);
 

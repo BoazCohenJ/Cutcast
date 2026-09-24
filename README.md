@@ -1,30 +1,30 @@
 <div align="center">
 
-<img src="docs/logo.png" width="96" alt="Podcast Autocut logo" />
+<img src="docs/logo.png" width="96" alt="Cutcast logo" />
 
-# Podcast Autocut
+# Cutcast
 
 **Drop in your podcast's camera and mic files. Get back an edited multicam video.**
 
-Podcast Autocut lines up every recording by its sound, cuts to whoever is talking, and exports one finished MP4
+Cutcast lines up every recording by its sound, cuts to whoever is talking, and exports one finished MP4
 with every microphone mixed underneath. It runs entirely on your own computer.
 
-[![Download](https://img.shields.io/github/v/release/BoazCohenJ/Podcast_Autocut?label=download&color=f59e0b)](https://github.com/BoazCohenJ/Podcast_Autocut/releases/latest)
-[![Tests](https://github.com/BoazCohenJ/Podcast_Autocut/actions/workflows/ci.yml/badge.svg)](https://github.com/BoazCohenJ/Podcast_Autocut/actions/workflows/ci.yml)
+[![Download](https://img.shields.io/github/v/release/BoazCohenJ/Cutcast?label=download&color=f59e0b)](https://github.com/BoazCohenJ/Cutcast/releases/latest)
+[![Tests](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml/badge.svg)](https://github.com/BoazCohenJ/Cutcast/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-38bdf8)
 
-<img src="docs/screenshot.png" alt="Podcast Autocut: preview, cut settings and timeline" width="900" />
+<img src="docs/screenshot.png" alt="Cutcast: preview, cut settings and timeline" width="900" />
 
 </div>
 
 ## Download
 
-Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/Podcast_Autocut/releases/latest)**:
+Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/Cutcast/releases/latest)**:
 
 | File | What it is |
 | --- | --- |
-| `Podcast.Autocut.Setup.x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts. |
-| `Podcast.Autocut.x.y.z.exe` | Portable. Nothing to install; just run it. |
+| `Cutcast.Setup.x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts. |
+| `Cutcast.x.y.z.exe` | Portable. Nothing to install; just run it. |
 
 > Windows may show a *SmartScreen* warning because the app isn't code-signed yet. Click **More info → Run anyway**.
 
@@ -44,7 +44,7 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
   podcast standard (−16 LUFS).
 - **Fast, reliable export.** Frame-accurate cuts with a progress bar and cancel button, plus NVIDIA, Intel or AMD
   hardware encoding when your computer supports it.
-- **Projects and safety nets.** `.podcut` project files, undo/redo, and automatic autosave that restores your last
+- **Projects and safety nets.** `.cutcast` project files, undo/redo, and automatic autosave that restores your last
   session.
 
 ## How to use it
