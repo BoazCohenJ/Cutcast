@@ -4,6 +4,7 @@
   "private": true,
   "description": "Automatic multi-camera podcast editor: syncs cameras and mics by audio and cuts to whoever is talking.",
   "author": "BoazCohenJ",
+  "license": "MIT",
   "homepage": "https://github.com/BoazCohenJ/Cutcast",
   "repository": {
     "type": "git",
