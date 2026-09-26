@@ -110,3 +110,7 @@ npm run dist:win   # build the installer and portable .exe into release/
 | `src/shared/` | Cut engine, audio sync and shared types |
 | `electron/` | Main process: media analysis, export pipeline, local media streaming |
 | `src/renderer/` | React interface: preview, timeline and side panels |
+
+## License
+
+[MIT](LICENSE). The bundled ffmpeg binary is distributed under its own license; see [ffmpeg.org/legal](https://ffmpeg.org/legal.html).
