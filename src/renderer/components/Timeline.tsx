@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { waveformBuckets } from '../../shared/cutEngine';
-import type { Camera, Mic, Project, Shot } from '../../shared/types';
+import { envelopeOf, type Camera, type Mic, type Project, type Shot } from '../../shared/types';
 import type { Analyses } from '../lib/projectOps';
 import { formatTime } from '../lib/util';
 
@@ -189,7 +189,7 @@ export function Timeline(props: Props) {
           context.strokeStyle = color;
           context.strokeRect(Math.round(x0) + 0.5, top + 0.5, Math.round(x1 - x0) - 1, barHeight - 1);
 
-          const envelope = analyses.get(track.path)?.envelope;
+          const envelope = envelopeOf(analyses.get(track.path), (track as Mic).audioTrack);
           if (envelope?.length) {
             const from = Math.max(0, x0);
             const to = Math.min(width, x1);

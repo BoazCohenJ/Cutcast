@@ -84,6 +84,10 @@ No, but they help a lot. With only camera videos, Cutcast uses the cameras' own 
 first camera), and every camera's audio is used to decide the cuts. Each person's own mic gives clearer sound and more
 accurate cuts.
 
+**My mics are separate audio tracks in one file.**
+That works. When a file has more than one audio track, Cutcast asks which tracks are mics, and each one you pick
+becomes its own microphone.
+
 **Does anything get uploaded?**
 No. All analysis and rendering happens on your computer with a bundled copy of ffmpeg.
 

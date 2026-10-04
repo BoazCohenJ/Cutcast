@@ -43,6 +43,17 @@ const inRange = (track: Track, time: number) => {
   return local >= 0 && local < (track.info?.durationSec ?? 0) - 0.05;
 };
 
+/** Play only this mic's track of a multi-track file (needs the AudioVideoTracks Blink feature, see electron/main.ts). */
+function selectAudioTrack(element: HTMLMediaElement, audioTrack = 0) {
+  const tracks = (element as HTMLMediaElement & { audioTracks?: ArrayLike<{ enabled: boolean }> }).audioTracks;
+  if (!tracks || tracks.length < 2) {
+    return;
+  }
+  for (let index = 0; index < tracks.length; index += 1) {
+    tracks[index].enabled = index === audioTrack;
+  }
+}
+
 export function Preview({ project, shots, duration, playhead, playing, onTime, onPlayingChange }: Props) {
   const elements = useRef(new Map<string, HTMLMediaElement>());
   const lastEmitted = useRef(playhead);
@@ -175,8 +186,12 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
               if (element) {
                 element.volume = Math.min(1, dbToGain(mic.volumeDb));
                 element.muted = mic.muted;
+                if (element.readyState >= HTMLMediaElement.HAVE_METADATA) {
+                  selectAudioTrack(element, mic.audioTrack);
+                }
               }
             }}
+            onLoadedMetadata={(event) => selectAudioTrack(event.currentTarget, mic.audioTrack)}
             src={mediaUrl(mic.path)}
             preload="auto"
           />

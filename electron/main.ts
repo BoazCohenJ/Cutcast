@@ -25,6 +25,9 @@ const MIME_TYPES: Record<string, string> = {
   '.opus': 'audio/ogg'
 };
 
+// Lets the preview pick which audio track of a multi-track file plays (HTMLMediaElement.audioTracks).
+app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
+
 // Lets the renderer stream local media into <video>/<audio> with seeking, in dev and packaged builds alike.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } }
