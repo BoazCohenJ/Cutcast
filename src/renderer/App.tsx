@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { planShots } from '../shared/cutEngine';
-import { emptyProject, exportRange, soundSources, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
+import { emptyProject, envelopeOf, exportRange, soundSources, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
 import { CutPanel } from './components/CutPanel';
-import { ExportDialog, HelpDialog, type ExportState } from './components/Dialogs';
+import { AudioTrackDialog, ExportDialog, HelpDialog, type ExportState } from './components/Dialogs';
 import { ExportPanel } from './components/ExportPanel';
 import { Preview, shotAt } from './components/Preview';
 import { SourcesPanel } from './components/SourcesPanel';
 import { Timeline } from './components/Timeline';
-import { addFiles, allTracks, autoSync, removeTrack, setOverride, updateTrack } from './lib/projectOps';
+import { addFiles, allTracks, autoSync, hasSeveralAudioTracks, removeTrack, setOverride, updateTrack } from './lib/projectOps';
 import { useHistory } from './lib/useHistory';
 import { fileName, stripExtension } from './lib/util';
 
@@ -34,6 +34,10 @@ export default function App() {
   const [encoders, setEncoders] = useState<string[]>(['libx264']);
   const [exportState, setExportState] = useState<ExportState | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [trackChoice, setTrackChoice] = useState<{
+    files: Array<{ path: string; analysis: MediaAnalysis }>;
+    resolve: (micTracks: Map<string, number[]>) => void;
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const restored = useRef(false);
@@ -45,7 +49,7 @@ export default function App() {
   const micEnvelopes = useMemo(() => {
     const map = new Map<string, Float32Array>();
     for (const mic of soundSources(project)) {
-      const envelope = analyses.get(mic.path)?.envelope;
+      const envelope = envelopeOf(analyses.get(mic.path), mic.audioTrack);
       if (envelope?.length) {
         map.set(mic.id, envelope);
       }
@@ -106,12 +110,19 @@ export default function App() {
       return;
     }
 
+    // A file can carry several mics as separate audio tracks: ask which ones to use.
+    const several = ok.filter(({ analysis }) => hasSeveralAudioTracks(analysis));
+    const micTracks = several.length
+      ? await new Promise<Map<string, number[]>>((resolve) => setTrackChoice({ files: several, resolve }))
+      : new Map<string, number[]>();
+    setTrackChoice(null);
+
     setSyncing(true);
     // Let the "Syncing…" state paint before the (brief) number crunching.
     await new Promise((resolve) => setTimeout(resolve, 30));
     setProject((current) => {
       const before = new Set(allTracks(current).map((track) => track.id));
-      const withFiles = addFiles(current, ok);
+      const withFiles = addFiles(current, ok, micTracks);
       const added = new Set(allTracks(withFiles).map((track) => track.id).filter((id) => !before.has(id)));
       return allTracks(withFiles).length > 1 ? autoSync(withFiles, all, before.size ? added : undefined) : withFiles;
     });
@@ -270,7 +281,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
-      if (exportState || helpOpen || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
+      if (exportState || helpOpen || trackChoice || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
         return;
       }
       if (target.tagName === 'BUTTON' && event.key === ' ') {
@@ -479,6 +490,7 @@ export default function App() {
       {dragging ? <div className="drop-overlay">Drop to add files</div> : null}
       {toast ? <div className="toast">{toast}</div> : null}
       {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
+      {trackChoice ? <AudioTrackDialog files={trackChoice.files} onDone={trackChoice.resolve} /> : null}
       {exportState ? (
         <ExportDialog
           state={exportState}

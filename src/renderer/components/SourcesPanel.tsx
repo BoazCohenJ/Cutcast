@@ -1,4 +1,5 @@
 import { soundSources, type Camera, type Mic, type Project, type Track } from '../../shared/types';
+import { audioTrackName } from '../lib/projectOps';
 import { fileName, formatTime } from '../lib/util';
 
 type Props = {
@@ -24,6 +25,10 @@ function TrackDetails({ track, error, onRelink }: { track: Track; error?: string
     );
   }
   const parts = [fileName(track.path)];
+  const audioTrack = (track as Partial<Mic>).audioTrack;
+  if (info && audioTrack !== undefined && (info.audioTracks?.length ?? 0) > 1) {
+    parts.push(audioTrackName(info, audioTrack));
+  }
   if (info?.width && info.height) {
     parts.push(`${info.width}×${info.height}`);
   }

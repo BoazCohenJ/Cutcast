@@ -98,7 +98,7 @@ function audioArgs(request: ExportRequest, target: string) {
     inputs.push('-i', mic.path);
     const delay = lead > 0 ? `,adelay=${Math.round(lead * 1000)}:all=1` : '';
     chains.push(
-      `[${index}:a:0]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=${mic.volumeDb}dB${delay}[m${index}]`
+      `[${index}:a:${mic.audioTrack ?? 0}]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=${mic.volumeDb}dB${delay}[m${index}]`
     );
   });
 
