@@ -163,3 +163,10 @@ export function exportRange(project: Project) {
   const end = Math.max(start, Math.min(project.outSec ?? duration, duration));
   return { start, end };
 }
+
+/** What the app knows about a newer release. Installed copies download it; the portable exe only links to it. */
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'downloading'; version: string }
+  | { state: 'ready'; version: string }
+  | { state: 'available'; version: string; url: string };

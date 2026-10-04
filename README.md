@@ -25,8 +25,8 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 
 | File | What it is |
 | --- | --- |
-| `Cutcast.Setup.x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts. |
-| `Cutcast.x.y.z.exe` | Portable. Nothing to install; just run it. |
+| `Cutcast.Setup.x.y.z.exe` | Installer. Adds Start menu and desktop shortcuts, and updates itself when a new version comes out. |
+| `Cutcast.x.y.z.exe` | Portable. Nothing to install; just run it. It tells you when a new version is out, but you download it yourself. |
 
 > Windows may show a *SmartScreen* warning because the app isn't code-signed yet. Click **More info → Run anyway**.
 
