@@ -51,7 +51,9 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 
 ## How to use it
 
-1. **Drop in all of an episode's files**: every camera video and every microphone recording.
+1. **Drop in all of an episode's files**: every camera video and every microphone recording. To choose what each
+   file is used for, use **Add video** (only the picture becomes a camera) and **Add audio** (only the sound becomes
+   mics, even from a video file).
 2. **Check who's who** in *Files & sync*. Each mic should show the camera that films that person, and your wide
    camera should be set to **Wide shot**. A camera with "wide" in its file name, or the third camera, is picked
    automatically.
@@ -85,8 +87,11 @@ first camera), and every camera's audio is used to decide the cuts. Each person'
 accurate cuts.
 
 **My mics are separate audio tracks in one file.**
-That works. When a file has more than one audio track, Cutcast asks which tracks are mics, and each one you pick
-becomes its own microphone.
+That works. Add the file with **Add audio**: Cutcast asks which tracks are mics, each one you pick becomes its own
+microphone, and the file's picture is ignored. Then set which camera each mic shows; several mics can share one camera.
+
+**I don't want to hear the cameras' built-in mics.**
+You won't once you add mic files. Camera sound is then only used to line the files up, never in the final mix.
 
 **Does anything get uploaded?**
 No. All analysis and rendering happens on your computer with a bundled copy of ffmpeg.
