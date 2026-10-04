@@ -190,3 +190,58 @@ export function findOffset(reference: Float32Array, other: Float32Array): SyncRe
 
   return { offsetSec: (bestLag + fraction) / ENVELOPE_RATE, confidence };
 }
+
+/** Window length and margins for measuring clock drift (seconds). */
+const DRIFT_WINDOW_SEC = 120;
+const DRIFT_SEARCH_SEC = 5;
+/** Drift is only measured on overlaps this long; shorter ones can't drift noticeably. */
+const DRIFT_MIN_OVERLAP_SEC = 600;
+/** Real recorders are within a few hundred parts per million; anything beyond is a bad match. */
+const DRIFT_MAX = 0.002;
+
+export type DriftResult = {
+  /** Seconds of `other` per second of `reference` (1 = same clock speed). */
+  rate: number;
+  /** Where `other` starts in `reference`'s own time, consistent with `rate`. */
+  offsetSec: number;
+};
+
+/**
+ * Measure how fast `other`'s clock runs compared to `reference`'s, by matching a window near the start of their
+ * overlap and one near the end. `offsetSec` is `findOffset`'s result. Returns null when the overlap is too short or
+ * either window doesn't match clearly, in which case the plain offset is the best answer.
+ */
+export function measureDrift(reference: Float32Array, other: Float32Array, offsetSec: number): DriftResult | null {
+  const otherDuration = other.length / ENVELOPE_RATE;
+  const referenceDuration = reference.length / ENVELOPE_RATE;
+  const from = Math.max(0, -offsetSec) + DRIFT_SEARCH_SEC;
+  const to = Math.min(otherDuration, referenceDuration - offsetSec) - DRIFT_SEARCH_SEC;
+  if (to - from < DRIFT_MIN_OVERLAP_SEC) {
+    return null;
+  }
+
+  /** Where `other`'s own second `at` lies in `reference`'s time, or null without a clear match. */
+  const locate = (at: number) => {
+    const own = other.subarray(Math.round(at * ENVELOPE_RATE), Math.round((at + DRIFT_WINDOW_SEC) * ENVELOPE_RATE));
+    const start = Math.max(0, offsetSec + at - DRIFT_SEARCH_SEC);
+    const slice = reference.subarray(
+      Math.round(start * ENVELOPE_RATE),
+      Math.round((offsetSec + at + DRIFT_WINDOW_SEC + DRIFT_SEARCH_SEC) * ENVELOPE_RATE)
+    );
+    const result = findOffset(slice, own);
+    return result.confidence >= 1.5 ? start + result.offsetSec : null;
+  };
+
+  const early = from;
+  const late = to - DRIFT_WINDOW_SEC;
+  const earlyAt = locate(early);
+  const lateAt = locate(late);
+  if (earlyAt === null || lateAt === null) {
+    return null;
+  }
+  const rate = (late - early) / (lateAt - earlyAt);
+  if (!Number.isFinite(rate) || Math.abs(rate - 1) > DRIFT_MAX) {
+    return null;
+  }
+  return { rate, offsetSec: earlyAt - early / rate };
+}

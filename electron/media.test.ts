@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runFfmpeg } from './ffmpeg';
+import { ENVELOPE_RATE } from '../src/shared/types';
 import { analyzeMedia } from './media';
 
 describe('analyzeMedia', () => {
@@ -37,5 +38,17 @@ describe('analyzeMedia', () => {
 
     const cached = await analyzeMedia(file, path.join(dir, 'cache'), () => undefined);
     expect(cached.envelopes.map((envelope) => Array.from(envelope))).toEqual(analysis.envelopes.map((envelope) => Array.from(envelope)));
+  }, 30000);
+
+  it('keeps a late-starting sound at its place in the file', async () => {
+    // Video from 0 s, sound from 0.5 s, as some cameras and recorders write it.
+    const source = path.join(dir, 'source.mp4');
+    const late = path.join(dir, 'late-sound.mp4');
+    await runFfmpeg(['-f', 'lavfi', '-i', 'color=red:s=64x64:d=2:r=30', '-f', 'lavfi', '-i', 'sine=f=440:d=2', '-c:v', 'libx264', '-c:a', 'aac', source]);
+    await runFfmpeg(['-i', source, '-itsoffset', '0.5', '-i', source, '-map', '0:v', '-map', '1:a', '-c', 'copy', late]);
+
+    const { envelopes } = await analyzeMedia(late, path.join(dir, 'cache'), () => undefined);
+    const firstSound = envelopes[0].findIndex((value) => value > 0.01) / ENVELOPE_RATE;
+    expect(firstSound).toBeCloseTo(0.5, 1);
   }, 30000);
 });
