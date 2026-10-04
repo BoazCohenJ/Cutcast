@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type Camera, type ExportProgress, type ExportRequest, type OutputSettings } from '../src/shared/types';
+import { toLocal, type Camera, type ExportProgress, type ExportRequest, type OutputSettings } from '../src/shared/types';
 import { CancelledError, runFfmpeg } from './ffmpeg';
 
 type Segment = {
@@ -67,7 +67,7 @@ function segmentArgs(segment: Segment, output: OutputSettings, target: string) {
   ].join(',');
 
   const input = segment.camera
-    ? ['-ss', Math.max(0, segment.timelineStart - segment.camera.offsetSec).toFixed(4), '-i', segment.camera.path]
+    ? ['-ss', Math.max(0, toLocal(segment.camera, segment.timelineStart)).toFixed(4), '-i', segment.camera.path]
     : ['-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`];
 
   return [
@@ -93,12 +93,14 @@ function audioArgs(request: ExportRequest, target: string) {
     const lead = mic.offsetSec - startSec;
     // Seek the input when it started before the export range; delay it when it starts after.
     if (lead < 0) {
-      inputs.push('-ss', (-lead).toFixed(4));
+      inputs.push('-ss', toLocal(mic, startSec).toFixed(4));
     }
     inputs.push('-i', mic.path);
     const delay = lead > 0 ? `,adelay=${Math.round(lead * 1000)}:all=1` : '';
+    // Play a recorder whose clock runs fast or slow at timeline speed, so it stays in sync to the end.
+    const tempo = mic.rate && mic.rate !== 1 ? `,atempo=${mic.rate.toFixed(8)}` : '';
     chains.push(
-      `[${index}:a:${mic.audioTrack ?? 0}]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=${mic.volumeDb}dB${delay}[m${index}]`
+      `[${index}:a:${mic.audioTrack ?? 0}]aresample=async=1:first_pts=0${tempo},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=${mic.volumeDb}dB${delay}[m${index}]`
     );
   });
 

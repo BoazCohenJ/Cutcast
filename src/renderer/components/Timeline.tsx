@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { waveformBuckets } from '../../shared/cutEngine';
-import { envelopeOf, type Camera, type Mic, type Project, type Shot } from '../../shared/types';
+import { envelopeOf, toLocal, trackEnd, type Camera, type Mic, type Project, type Shot } from '../../shared/types';
 import type { Analyses } from '../lib/projectOps';
 import { formatTime } from '../lib/util';
 
@@ -175,10 +175,9 @@ export function Timeline(props: Props) {
 
       if (row.kind === 'track') {
         const { track } = row;
-        const trackDuration = track.info?.durationSec ?? 0;
         const color = row.isCamera ? (track as Camera).color : cameraColor((track as Mic).cameraId);
         const x0 = toX(track.offsetSec);
-        const x1 = toX(track.offsetSec + trackDuration);
+        const x1 = toX(trackEnd(track));
         const top = y + 5;
         const barHeight = row.height - 10;
         if (x1 > 0 && x0 < width) {
@@ -197,8 +196,8 @@ export function Timeline(props: Props) {
             const buckets = Math.max(1, Math.floor((to - from) / 2));
             const levels = waveformBuckets(
               envelope,
-              viewStart + from / px - track.offsetSec,
-              viewStart + to / px - track.offsetSec,
+              toLocal(track, viewStart + from / px),
+              toLocal(track, viewStart + to / px),
               buckets
             );
             const mid = top + barHeight / 2;
@@ -289,7 +288,7 @@ export function Timeline(props: Props) {
 
     if (row?.kind === 'track') {
       const { track } = row;
-      const onBar = time >= track.offsetSec && time <= track.offsetSec + (track.info?.durationSec ?? 0);
+      const onBar = time >= track.offsetSec && time <= trackEnd(track);
       if (onBar) {
         const startX = event.clientX;
         const startOffset = track.offsetSec;
@@ -333,7 +332,7 @@ export function Timeline(props: Props) {
     }
     const { time, row } = hit(event);
     const onBar =
-      row?.kind === 'track' && time >= row.track.offsetSec && time <= row.track.offsetSec + (row.track.info?.durationSec ?? 0);
+      row?.kind === 'track' && time >= row.track.offsetSec && time <= trackEnd(row.track);
     setCursor(onBar ? 'grab' : row?.kind === 'cuts' ? 'pointer' : 'text');
   };
 
