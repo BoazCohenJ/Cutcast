@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ExportProgress } from '../../shared/types';
+import type { ExportProgress, MediaAnalysis } from '../../shared/types';
+import { audioTrackName } from '../lib/projectOps';
 import { fileName } from '../lib/util';
 
 export type ExportState =
@@ -98,6 +99,43 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </table>
         <div className="modal-actions">
           <button onClick={onClose}>Got it</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Asked on import for files that carry several audio tracks (e.g. one per mic): which tracks become mics. */
+export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: string; analysis: MediaAnalysis }>; onDone: (micTracks: Map<string, number[]>) => void }) {
+  const [picked, setPicked] = useState(() => new Map(files.map(({ path, analysis }) => [path, (analysis.audioTracks ?? []).map((_, index) => index)])));
+  const toggle = (path: string, track: number, on: boolean) =>
+    setPicked((current) => {
+      const others = (current.get(path) ?? []).filter((item) => item !== track);
+      return new Map(current).set(path, on ? [...others, track].sort((a, b) => a - b) : others);
+    });
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <h2>Which audio tracks are mics?</h2>
+        <div className="muted">Each track you tick becomes its own microphone.</div>
+        {files.map(({ path, analysis }) => (
+          <div key={path}>
+            <h3>{fileName(path)}</h3>
+            {(analysis.audioTracks ?? []).map((track, index) => (
+              <label className="check" key={index}>
+                <input type="checkbox" checked={picked.get(path)?.includes(index) ?? false} onChange={(event) => toggle(path, index, event.target.checked)} />
+                {audioTrackName(analysis, index)}
+                {track.layout ? <span className="muted small">{track.layout}</span> : null}
+              </label>
+            ))}
+            <div className="muted small">
+              {analysis.hasVideo ? 'Untick them all to use this camera’s own sound instead.' : 'Untick them all to leave this file out.'}
+            </div>
+          </div>
+        ))}
+        <div className="modal-actions">
+          <button onClick={() => onDone(picked)}>Add</button>
         </div>
       </div>
     </div>

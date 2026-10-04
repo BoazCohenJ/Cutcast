@@ -6,7 +6,7 @@ import { ENVELOPE_RATE, type MediaAnalysis, type MediaInfo } from '../src/shared
 import { ffmpegPath, runFfmpeg } from './ffmpeg';
 
 const ANALYSIS_SAMPLE_RATE = 8000;
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 /** Read duration and stream details from ffmpeg's banner (ffmpeg-static ships without ffprobe). */
 export async function probeMedia(inputPath: string): Promise<MediaInfo> {
@@ -28,7 +28,7 @@ export async function probeMedia(inputPath: string): Promise<MediaInfo> {
   const videoLine = output
     .split(/\r?\n/)
     .find((line) => /Stream #.*Video:/.test(line) && !/attached pic/.test(line));
-  const hasAudio = /Stream #.*Audio:/.test(output);
+  const audioTracks = audioTracksOf(output);
   const size = videoLine?.match(/, (\d{2,5})x(\d{2,5})/);
   const fps = videoLine?.match(/([\d.]+) fps/) ?? videoLine?.match(/([\d.]+) tbr/);
   const rotation = output.match(/rotation of (-?[\d.]+) degrees/);
@@ -37,7 +37,8 @@ export async function probeMedia(inputPath: string): Promise<MediaInfo> {
   const info: MediaInfo = {
     durationSec: duration ? Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]) : 0,
     hasVideo: Boolean(videoLine),
-    hasAudio
+    hasAudio: audioTracks.length > 0,
+    audioTracks
   };
   if (size) {
     info.width = Number(rotated ? size[2] : size[1]);
@@ -49,17 +50,41 @@ export async function probeMedia(inputPath: string): Promise<MediaInfo> {
   return info;
 }
 
+/** Each audio stream's title (when the recorder set one) and channel layout. */
+function audioTracksOf(output: string) {
+  const tracks: NonNullable<MediaInfo['audioTracks']> = [];
+  let current: (typeof tracks)[number] | null = null;
+  const flush = () => {
+    if (current) {
+      tracks.push(current);
+    }
+  };
+  for (const line of output.split(/\r?\n/)) {
+    if (/^\s*Stream #/.test(line)) {
+      flush();
+      current = /Audio:/.test(line) ? { layout: line.match(/ Hz, ([^,]+)/)?.[1] } : null;
+    } else if (current) {
+      const title = line.match(/^\s+title\s*: (.+)$/);
+      if (title) {
+        current.title = title[1].trim();
+      }
+    }
+  }
+  flush();
+  return tracks;
+}
+
 async function cacheFile(cacheDir: string, inputPath: string) {
   const stat = await fs.stat(inputPath);
   const key = createHash('sha1').update(`${CACHE_VERSION}|${path.resolve(inputPath)}|${stat.size}|${stat.mtimeMs}`).digest('hex');
   return path.join(cacheDir, `${key}.json`);
 }
 
-/** Decode the first audio stream to 8 kHz mono and reduce it to an RMS envelope, streaming. */
-async function computeEnvelope(inputPath: string, durationSec: number, onProgress: (fraction: number) => void) {
+/** Decode one audio stream to 8 kHz mono and reduce it to an RMS envelope, streaming. */
+async function computeEnvelope(inputPath: string, audioTrack: number, durationSec: number, onProgress: (fraction: number) => void) {
   const child = spawn(
     ffmpegPath(),
-    ['-v', 'error', '-i', inputPath, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(ANALYSIS_SAMPLE_RATE), '-f', 's16le', 'pipe:1'],
+    ['-v', 'error', '-i', inputPath, '-map', `0:a:${audioTrack}`, '-vn', '-ac', '1', '-ar', String(ANALYSIS_SAMPLE_RATE), '-f', 's16le', 'pipe:1'],
     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
   );
 
@@ -114,23 +139,29 @@ export async function analyzeMedia(inputPath: string, cacheDir: string, onProgre
 
   const cachePath = await cacheFile(cacheDir, inputPath);
   try {
-    const cached = JSON.parse(await fs.readFile(cachePath, 'utf8')) as MediaInfo & { envelope: string };
-    const bytes = Buffer.from(cached.envelope, 'base64');
-    const envelope = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    const cached = JSON.parse(await fs.readFile(cachePath, 'utf8')) as MediaInfo & { envelopes: string[] };
+    const envelopes = cached.envelopes.map((encoded) => {
+      const bytes = Buffer.from(encoded, 'base64');
+      return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    });
     onProgress(1);
-    return { ...cached, envelope };
+    return { ...cached, envelopes };
   } catch {
     // Not cached yet.
   }
 
   const info = await probeMedia(inputPath);
-  const envelope = info.hasAudio ? await computeEnvelope(inputPath, info.durationSec, onProgress) : new Float32Array();
+  const trackCount = info.audioTracks?.length ?? 0;
+  const envelopes: Float32Array[] = [];
+  for (let track = 0; track < trackCount; track += 1) {
+    envelopes.push(await computeEnvelope(inputPath, track, info.durationSec, (fraction) => onProgress((track + fraction) / trackCount)));
+  }
   onProgress(1);
 
   await fs.mkdir(cacheDir, { recursive: true });
-  const encoded = Buffer.from(envelope.buffer, envelope.byteOffset, envelope.byteLength).toString('base64');
-  await fs.writeFile(cachePath, JSON.stringify({ ...info, envelope: encoded })).catch(() => undefined);
-  return { ...info, envelope };
+  const encoded = envelopes.map((envelope) => Buffer.from(envelope.buffer, envelope.byteOffset, envelope.byteLength).toString('base64'));
+  await fs.writeFile(cachePath, JSON.stringify({ ...info, envelopes: encoded })).catch(() => undefined);
+  return { ...info, envelopes };
 }
 
 /** Which H.264 encoders actually work on this machine (hardware encoders depend on the GPU and driver). */

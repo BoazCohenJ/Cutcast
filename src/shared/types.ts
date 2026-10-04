@@ -7,15 +7,20 @@ export type MediaInfo = {
   durationSec: number;
   hasVideo: boolean;
   hasAudio: boolean;
+  /** The file's audio tracks: the title the recorder gave each one, and its channel layout. Missing in older projects. */
+  audioTracks?: Array<{ title?: string; layout?: string }>;
   width?: number;
   height?: number;
   fps?: number;
 };
 
 export type MediaAnalysis = MediaInfo & {
-  /** Linear RMS (0..1) of the file's first audio stream, ENVELOPE_RATE values per second. */
-  envelope: Float32Array;
+  /** Linear RMS (0..1) of each of the file's audio tracks, ENVELOPE_RATE values per second. */
+  envelopes: Float32Array[];
 };
+
+/** Loudness envelope of one audio track of an analysed file (the first track by default). */
+export const envelopeOf = (analysis: MediaAnalysis | undefined, audioTrack = 0) => analysis?.envelopes[audioTrack];
 
 /** A file placed on the shared timeline. `offsetSec` is where the file's own 0s lands on the timeline. */
 export type Track = {
@@ -41,6 +46,8 @@ export type Mic = Track & {
   cameraId: string | null;
   volumeDb: number;
   muted: boolean;
+  /** Which of the file's audio tracks this mic is (0 = first), for files that carry several mics. */
+  audioTrack?: number;
 };
 
 export type Override = {

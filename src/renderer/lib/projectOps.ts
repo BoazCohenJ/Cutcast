@@ -1,13 +1,30 @@
 import { findOffset } from '../../shared/sync';
-import type { Camera, MediaAnalysis, MediaInfo, Mic, OutputSettings, Project, Track } from '../../shared/types';
+import { envelopeOf, type Camera, type MediaAnalysis, type MediaInfo, type Mic, type OutputSettings, type Project, type Track } from '../../shared/types';
 import { CAMERA_COLORS, createId, fileName, stripExtension } from './util';
 
 export type Analyses = ReadonlyMap<string, MediaAnalysis>;
 
-const infoOf = ({ envelope: _envelope, ...info }: MediaAnalysis): MediaInfo => info;
+const infoOf = ({ envelopes: _envelopes, ...info }: MediaAnalysis): MediaInfo => info;
 
-/** Sort new files into cameras and mics, and wire each mic to a close-up camera. */
-export function addFiles(project: Project, files: Array<{ path: string; analysis: MediaAnalysis }>): Project {
+/** Files with more than one audio track, where the user picks which tracks are mics. */
+export const hasSeveralAudioTracks = (analysis: MediaAnalysis) => (analysis.audioTracks?.length ?? 0) > 1;
+
+/** "Track 2", plus the title the recorder gave it when there is one. */
+export const audioTrackName = (info: MediaInfo, audioTrack: number) => {
+  const title = info.audioTracks?.[audioTrack]?.title;
+  return title ? `Track ${audioTrack + 1} (${title})` : `Track ${audioTrack + 1}`;
+};
+
+/**
+ * Sort new files into cameras and mics, and wire each mic to a close-up camera.
+ * `micTracks` says which audio tracks of a multi-track file become mics (one mic each); without a choice, a video
+ * file adds no mic and an audio file adds its first track.
+ */
+export function addFiles(
+  project: Project,
+  files: Array<{ path: string; analysis: MediaAnalysis }>,
+  micTracks: ReadonlyMap<string, number[]> = new Map()
+): Project {
   const cameras = [...project.cameras];
   const mics = [...project.mics];
 
@@ -27,8 +44,12 @@ export function addFiles(project: Project, files: Array<{ path: string; analysis
         role: looksWide || (speakerCount >= 2 && !hasWide) ? 'wide' : 'speaker',
         color: CAMERA_COLORS[cameras.length % CAMERA_COLORS.length]
       });
-    } else if (analysis.hasAudio) {
-      mics.push({ id: createId(), path, name, offsetSec: 0, info: infoOf(analysis), cameraId: null, volumeDb: 0, muted: false });
+    }
+    const tracks = micTracks.get(path) ?? (!analysis.hasVideo && analysis.hasAudio ? [0] : []);
+    for (const audioTrack of tracks) {
+      const info = infoOf(analysis);
+      const micName = hasSeveralAudioTracks(analysis) ? `${name} ${audioTrackName(info, audioTrack)}` : name;
+      mics.push({ id: createId(), path, name: micName, offsetSec: 0, info, cameraId: null, volumeDb: 0, muted: false, audioTrack });
     }
   }
 
@@ -79,7 +100,7 @@ export function normalizeOffsets(project: Project): Project {
  * Mics make the best reference: they're cleaner than camera scratch audio.
  */
 export function autoSync(project: Project, analyses: Analyses, onlyIds?: ReadonlySet<string>): Project {
-  const envelope = (track: Track) => analyses.get(track.path)?.envelope;
+  const envelope = (track: Track) => envelopeOf(analyses.get(track.path), (track as Partial<Mic>).audioTrack);
   const tracks: Track[] = [...project.mics, ...project.cameras];
   // When syncing just-added files, anchor on something already placed so earlier nudges survive.
   const ordered = onlyIds ? [...tracks.filter((track) => !onlyIds.has(track.id)), ...tracks.filter((track) => onlyIds.has(track.id))] : tracks;
