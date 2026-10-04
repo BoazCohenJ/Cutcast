@@ -23,6 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "ffmpeg-static": "^5.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -47,6 +48,11 @@
     "productName": "Cutcast",
     "directories": {
       "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "BoazCohenJ",
+      "repo": "Cutcast"
     },
     "files": [
       "dist-renderer/**",

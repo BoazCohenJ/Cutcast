@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { ExportProgress, ExportRequest, MediaAnalysis, Project } from '../src/shared/types';
+import type { ExportProgress, ExportRequest, MediaAnalysis, Project, UpdateStatus } from '../src/shared/types';
 
 function subscribe<T extends unknown[]>(channel: string, listener: (...args: T) => void) {
   const handler = (_event: IpcRendererEvent, ...args: unknown[]) => listener(...(args as T));
@@ -27,7 +27,12 @@ const desktopApi = {
   cancelExport: (): Promise<void> => ipcRenderer.invoke('export:cancel'),
   onExportProgress: (listener: (progress: ExportProgress) => void) => subscribe('export:progress', listener),
 
-  showItemInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:showItem', filePath)
+  showItemInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:showItem', filePath),
+
+  updateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:status'),
+  onUpdateStatus: (listener: (status: UpdateStatus) => void) => subscribe('update:status', listener),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
+  openRelease: (): Promise<void> => ipcRenderer.invoke('update:openRelease')
 };
 
 export type DesktopApi = typeof desktopApi;
