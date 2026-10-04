@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyProject, ENVELOPE_RATE, soundSources, type MediaAnalysis } from '../../shared/types';
+import { emptyProject, ENVELOPE_RATE, type MediaAnalysis } from '../../shared/types';
 import { addFiles, autoSync, importedPaths } from './projectOps';
 
 /** Bursts of loudness at pseudo-random times, so two copies can only line up one way. */
@@ -39,9 +39,8 @@ describe('adding video and audio separately', () => {
       { path: 'mics.mp4', name: 'mics Track 1 (Host)', audioTrack: 0 },
       { path: 'mics.mp4', name: 'mics Track 2', audioTrack: 1 }
     ]);
-    // Each mic shows its own camera, and only the mics are heard, not the cameras' built-in sound.
+    // Each mic shows its own camera.
     expect(project.mics.map((mic) => mic.cameraId)).toEqual(project.cameras.map((camera) => camera.id));
-    expect(soundSources(project).map((source) => source.path)).toEqual(['mics.mp4', 'mics.mp4']);
   });
 
   it('links mics to cameras whichever is added first', () => {

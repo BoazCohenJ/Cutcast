@@ -82,16 +82,12 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 Video: MP4, MOV, MKV, WebM, M4V, AVI. Audio: WAV, MP3, M4A, AAC, FLAC, OGG, Opus, AIFF.
 
 **Do I need separate microphone files?**
-No, but they help a lot. With only camera videos, Cutcast uses the cameras' own sound: you hear the wide camera (or the
-first camera), and every camera's audio is used to decide the cuts. Each person's own mic gives clearer sound and more
-accurate cuts.
+Yes, the sound and the cuts come from the mics. Cameras are picture only: their built-in sound is never heard and only
+lines the files up. If a camera's sound is all you have, add that file with **Add audio** too.
 
 **My mics are separate audio tracks in one file.**
 That works. Add the file with **Add audio**: Cutcast asks which tracks are mics, each one you pick becomes its own
 microphone, and the file's picture is ignored. Then set which camera each mic shows; several mics can share one camera.
-
-**I don't want to hear the cameras' built-in mics.**
-You won't once you add mic files. Camera sound is then only used to line the files up, never in the final mix.
 
 **Does anything get uploaded?**
 No. All analysis and rendering happens on your computer with a bundled copy of ffmpeg.

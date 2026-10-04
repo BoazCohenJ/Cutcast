@@ -189,7 +189,8 @@ export function Timeline(props: Props) {
           context.strokeStyle = color;
           context.strokeRect(Math.round(x0) + 0.5, top + 0.5, Math.round(x1 - x0) - 1, barHeight - 1);
 
-          const envelope = envelopeOf(analyses.get(track.path), (track as Mic).audioTrack);
+          // Cameras are picture only, so only mics show a waveform.
+          const envelope = row.isCamera ? undefined : envelopeOf(analyses.get(track.path), (track as Mic).audioTrack);
           if (envelope?.length) {
             const from = Math.max(0, x0);
             const to = Math.min(width, x1);

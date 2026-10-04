@@ -1,4 +1,4 @@
-import { soundSources, type Camera, type Mic, type Project, type Track } from '../../shared/types';
+import { type Camera, type Mic, type Project, type Track } from '../../shared/types';
 import { audioTrackName } from '../lib/projectOps';
 import { fileName, formatTime } from '../lib/util';
 
@@ -70,8 +70,6 @@ function OffsetControl({ track, onUpdate }: { track: Track; onUpdate: Props['onU
 
 export function SourcesPanel({ project, importing, errors, syncing, onAddVideo, onAddAudio, onAutoSync, onUpdate, onRemove, onRelink }: Props) {
   const importingPaths = Object.keys(importing);
-  const heardId = soundSources(project).find((source) => !source.muted)?.path;
-  const heardCamera = project.mics.length ? undefined : project.cameras.find((camera) => camera.path === heardId);
   const trackCount = project.cameras.length + project.mics.length;
 
   return (
@@ -112,14 +110,10 @@ export function SourcesPanel({ project, importing, errors, syncing, onAddVideo, 
 
       <h3>Microphones</h3>
       {!project.mics.length ? (
-        heardCamera ? (
-          <p className="muted small">
-            No microphone files, so you’ll hear <strong>{heardCamera.name}</strong>’s own sound. For clearer sound and better cuts, add each
-            person’s mic recording.
-          </p>
-        ) : (
-          <p className="muted small">No microphones yet. Use Add audio for each person’s mic. A video file works too: only its sound is used.</p>
-        )
+        <p className="muted small">
+          No microphones yet, so the video is silent and won’t cut between speakers. Use Add audio for each person’s mic.
+          A video file works too: only its sound is used.
+        </p>
       ) : null}
       {project.mics.map((mic) => (
         <div className={`track-card ${mic.muted ? 'dimmed' : ''}`} key={mic.id}>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { planShots, smoothActivity } from './cutEngine';
 import { findOffset } from './sync';
-import { emptyProject, ENVELOPE_RATE, soundSources, type Camera, type Mic, type Project, type Shot } from './types';
+import { emptyProject, ENVELOPE_RATE, type Camera, type Mic, type Project, type Shot } from './types';
 
 /** Deterministic pseudo-random numbers so tests are stable. */
 function rng(seed: number) {
@@ -132,36 +132,12 @@ describe('planShots', () => {
   });
 });
 
-describe('camera sound when there are no mic files', () => {
-  it('plays only the wide camera, but lets every camera drive the cuts', () => {
-    const { project } = setup([[0, 10]], [], 10);
-    const sources = soundSources({ ...project, mics: [] });
-    expect(sources.map((source) => source.path)).toEqual(['camA.mp4', 'camB.mp4', 'wide.mp4']);
-    expect(sources.filter((source) => !source.muted).map((source) => source.path)).toEqual(['wide.mp4']);
-    expect(sources.find((source) => source.path === 'camA.mp4')?.cameraId).toBe('camA');
-    expect(sources.find((source) => source.path === 'wide.mp4')?.cameraId).toBeNull();
-  });
-
-  it('plays the first camera when there is no wide shot', () => {
-    const { project } = setup([[0, 10]], [], 10, false);
-    expect(soundSources({ ...project, mics: [] }).filter((source) => !source.muted).map((source) => source.path)).toEqual(['camA.mp4']);
-  });
-
-  it('still cuts between speakers using the cameras’ own audio', () => {
-    const { project, envelopes } = setup([[0, 20]], [[20, 40]], 40);
-    const cameraOnly = { ...project, mics: [] };
-    const byCamera = new Map([
-      ['camera-audio:camA', envelopes.get('micA')!],
-      ['camera-audio:camB', envelopes.get('micB')!]
-    ]);
-    const shots = planShots(cameraOnly, byCamera);
-    expect(cameraAt(shots, 10)).toBe('camA');
-    expect(cameraAt(shots, 30)).toBe('camB');
-  });
-
-  it('uses the real mics as soon as there are any', () => {
-    const { project } = setup([[0, 10]], [], 10);
-    expect(soundSources(project)).toBe(project.mics);
+describe('cameras without mics', () => {
+  it('never cuts on the cameras’ own sound', () => {
+    const { project } = setup([[0, 20]], [[20, 40]], 40);
+    const shots = planShots({ ...project, mics: [] }, new Map());
+    expect(shots.length).toBeGreaterThan(0);
+    expect(shots.some((shot) => shot.reason === 'speaker')).toBe(false);
   });
 });
 
