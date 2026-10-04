@@ -7,7 +7,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { Preview, shotAt } from './components/Preview';
 import { SourcesPanel } from './components/SourcesPanel';
 import { Timeline } from './components/Timeline';
-import { addFiles, allTracks, autoSync, hasSeveralAudioTracks, removeTrack, setOverride, updateTrack } from './lib/projectOps';
+import { addFiles, allTracks, autoSync, hasSeveralAudioTracks, importedPaths, removeTrack, setOverride, takesAudio, takesVideo, updateTrack, type ImportKind } from './lib/projectOps';
 import { useHistory } from './lib/useHistory';
 import { fileName, stripExtension } from './lib/util';
 
@@ -95,23 +95,24 @@ export default function App() {
     return { ok, all: next };
   }, [analyses]);
 
-  const importFiles = useCallback(async (paths: string[]) => {
-    const known = new Set(allTracks(history.ref.current).map((track) => track.path));
+  const importFiles = useCallback(async (paths: string[], kind: ImportKind) => {
+    const known = importedPaths(history.ref.current, kind);
     const fresh = [...new Set(paths)].filter((path) => !known.has(path));
     if (!fresh.length) {
       return;
     }
     const { ok, all } = await analyzePaths(fresh);
-    const skipped = ok.filter(({ analysis }) => !analysis.hasVideo && !analysis.hasAudio);
+    const skipped = ok.filter(({ analysis }) => !takesVideo(analysis, kind) && !takesAudio(analysis, kind));
     if (skipped.length) {
-      showToast(`${skipped.map(({ path }) => fileName(path)).join(', ')} has no video or sound.`);
+      const missing = kind === 'video' ? 'video' : kind === 'audio' ? 'sound' : 'video or sound';
+      showToast(`${skipped.map(({ path }) => fileName(path)).join(', ')} has no ${missing}.`);
     }
     if (!ok.length) {
       return;
     }
 
     // A file can carry several mics as separate audio tracks: ask which ones to use.
-    const several = ok.filter(({ analysis }) => hasSeveralAudioTracks(analysis));
+    const several = ok.filter(({ analysis }) => takesAudio(analysis, kind) && hasSeveralAudioTracks(analysis));
     const micTracks = several.length
       ? await new Promise<Map<string, number[]>>((resolve) => setTrackChoice({ files: several, resolve }))
       : new Map<string, number[]>();
@@ -122,7 +123,7 @@ export default function App() {
     await new Promise((resolve) => setTimeout(resolve, 30));
     setProject((current) => {
       const before = new Set(allTracks(current).map((track) => track.id));
-      const withFiles = addFiles(current, ok, micTracks);
+      const withFiles = addFiles(current, ok, kind, micTracks);
       const added = new Set(allTracks(withFiles).map((track) => track.id).filter((id) => !before.has(id)));
       return allTracks(withFiles).length > 1 ? autoSync(withFiles, all, before.size ? added : undefined) : withFiles;
     });
@@ -219,7 +220,7 @@ export default function App() {
     setErrors({});
   };
 
-  const addFilesFromDialog = async () => importFiles(await api.openMedia());
+  const addFilesFromDialog = async (kind: ImportKind) => importFiles(await api.openMedia(), kind);
 
   const runAutoSync = async () => {
     setSyncing(true);
@@ -349,7 +350,7 @@ export default function App() {
       showToast('Use Open to load a project file.');
       return;
     }
-    void importFiles(files.map((file) => api.pathForFile(file)).filter(Boolean));
+    void importFiles(files.map((file) => api.pathForFile(file)).filter(Boolean), 'auto');
   };
 
   const hasTracks = allTracks(project).length > 0;
@@ -415,7 +416,8 @@ export default function App() {
                   importing={importing}
                   errors={errors}
                   syncing={syncing}
-                  onAddFiles={() => void addFilesFromDialog()}
+                  onAddVideo={() => void addFilesFromDialog('video')}
+                  onAddAudio={() => void addFilesFromDialog('audio')}
                   onAutoSync={() => void runAutoSync()}
                   onUpdate={(id, patch) => setProject((current) => updateTrack(current, id, patch))}
                   onRemove={(id) => setProject((current) => removeTrack(current, id))}
@@ -473,9 +475,13 @@ export default function App() {
           <div className="drop-card">
             <div className="drop-icon">⬇</div>
             <h1>Drop your recordings here</h1>
-            <p>All camera videos and microphone files from one episode. They get sorted and synced automatically.</p>
+            <p>
+              All camera videos and microphone files from one episode. They get sorted and synced automatically. Or add
+              them yourself: Add video takes only a file’s picture, Add audio only its sound.
+            </p>
             <div className="button-row center">
-              <button onClick={() => void addFilesFromDialog()}>Choose files…</button>
+              <button onClick={() => void addFilesFromDialog('video')}>Add video…</button>
+              <button onClick={() => void addFilesFromDialog('audio')}>Add audio…</button>
               <button className="secondary" onClick={() => void openProject()}>Open a project…</button>
             </div>
             <ol className="steps compact">
