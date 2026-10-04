@@ -6,7 +6,7 @@ import { ENVELOPE_RATE, type MediaAnalysis, type MediaInfo } from '../src/shared
 import { ffmpegPath, runFfmpeg } from './ffmpeg';
 
 const ANALYSIS_SAMPLE_RATE = 8000;
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 /** Read duration and stream details from ffmpeg's banner (ffmpeg-static ships without ffprobe). */
 export async function probeMedia(inputPath: string): Promise<MediaInfo> {
@@ -80,11 +80,15 @@ async function cacheFile(cacheDir: string, inputPath: string) {
   return path.join(cacheDir, `${key}.json`);
 }
 
-/** Decode one audio stream to 8 kHz mono and reduce it to an RMS envelope, streaming. */
+/**
+ * Decode one audio stream to 8 kHz mono and reduce it to an RMS envelope, streaming. The envelope starts at the file's
+ * time 0, like the preview and export do: a track whose sound starts late (common in camera and recorder files) gets
+ * leading silence instead of being shifted earlier, which would put it out of sync with the picture.
+ */
 async function computeEnvelope(inputPath: string, audioTrack: number, durationSec: number, onProgress: (fraction: number) => void) {
   const child = spawn(
     ffmpegPath(),
-    ['-v', 'error', '-i', inputPath, '-map', `0:a:${audioTrack}`, '-vn', '-ac', '1', '-ar', String(ANALYSIS_SAMPLE_RATE), '-f', 's16le', 'pipe:1'],
+    ['-v', 'error', '-i', inputPath, '-map', `0:a:${audioTrack}`, '-vn', '-af', 'aresample=async=1:first_pts=0', '-ac', '1', '-ar', String(ANALYSIS_SAMPLE_RATE), '-f', 's16le', 'pipe:1'],
     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
   );
 

@@ -30,7 +30,18 @@ export type Track = {
   info?: MediaInfo;
   /** Set by auto-sync; below ~1.5 the match is doubtful and worth checking by ear. */
   syncConfidence?: number;
+  /**
+   * Seconds of this file per timeline second. Devices' clocks run slightly fast or slow (often 20-100 parts per
+   * million), which adds up to a visible lip-sync error over a long recording; auto-sync measures it. Missing = 1.
+   */
+  rate?: number;
 };
+
+/** The file's own time at a timeline second. */
+export const toLocal = (track: Track, timelineSec: number) => (timelineSec - track.offsetSec) * (track.rate ?? 1);
+
+/** The timeline second at which the file reaches its own time `localSec`. */
+export const toTimeline = (track: Track, localSec: number) => track.offsetSec + localSec / (track.rate ?? 1);
 
 export type CameraRole = 'speaker' | 'wide';
 
@@ -149,7 +160,7 @@ export const emptyProject = (): Project => ({
   output: { ...DEFAULT_OUTPUT }
 });
 
-export const trackEnd = (track: Track) => track.offsetSec + (track.info?.durationSec ?? 0);
+export const trackEnd = (track: Track) => toTimeline(track, track.info?.durationSec ?? 0);
 
 /** Full timeline span covered by any track. */
 export function timelineDuration(project: Project) {

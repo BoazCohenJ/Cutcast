@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planShots, smoothActivity } from './cutEngine';
-import { findOffset } from './sync';
+import { findOffset, measureDrift } from './sync';
 import { emptyProject, ENVELOPE_RATE, type Camera, type Mic, type Project, type Shot } from './types';
 
 /** Deterministic pseudo-random numbers so tests are stable. */
@@ -173,5 +173,42 @@ describe('findOffset', () => {
     other.set(reference, lead.length);
     const result = findOffset(reference, other);
     expect(result.offsetSec).toBeCloseTo(-5, 1);
+  });
+});
+
+describe('measureDrift', () => {
+  const talk: Talk[] = Array.from({ length: 180 }, (_, index) => [index * 10, index * 10 + 7] as Talk);
+  const reference = envelope(voice(1800, talk, 21), null, 22);
+
+  /** What a device whose clock runs `rate` times as fast hears, starting `startSec` into the reference. */
+  function recordedBy(rate: number, startSec: number, seconds: number) {
+    const random = rng(23);
+    return Float32Array.from({ length: seconds * ENVELOPE_RATE }, (_, index) => {
+      const at = (startSec + index / ENVELOPE_RATE / rate) * ENVELOPE_RATE;
+      const low = Math.floor(at);
+      const value = reference[low] + (reference[low + 1] - reference[low]) * (at - low);
+      return value * 0.3 + random() * 0.003;
+    });
+  }
+
+  it('measures a clock running 100 ppm fast and keeps the end in sync', () => {
+    const rate = 1.0001;
+    const other = recordedBy(rate, 3.21, 1700);
+    const { offsetSec } = findOffset(reference, other);
+    const drift = measureDrift(reference, other, offsetSec)!;
+    expect((drift.rate - 1) * 1e6).toBeCloseTo(100, -1);
+    // Where the device's last minute lands in the reference: off by under a frame, against about 80 ms without correction.
+    const local = 1650;
+    const truth = 3.21 + local / rate;
+    expect(Math.abs(drift.offsetSec + local / drift.rate - truth)).toBeLessThan(0.02);
+    expect(Math.abs(offsetSec + local - truth)).toBeGreaterThan(0.05);
+  });
+
+  it('reports no drift for the same clock, and skips short overlaps', () => {
+    const same = recordedBy(1, 3.21, 1700);
+    const drift = measureDrift(reference, same, findOffset(reference, same).offsetSec)!;
+    expect(Math.abs(drift.rate - 1) * 1e6).toBeLessThan(10);
+    const short = recordedBy(1.0001, 3.21, 300);
+    expect(measureDrift(reference, short, findOffset(reference, short).offsetSec)).toBeNull();
   });
 });
