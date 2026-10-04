@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { planShots } from '../shared/cutEngine';
-import { emptyProject, envelopeOf, exportRange, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
+import { emptyProject, envelopeOf, exportRange, timelineDuration, type MediaAnalysis, type Project, type Track, type UpdateStatus } from '../shared/types';
 import { CutPanel } from './components/CutPanel';
 import { AudioTrackDialog, ExportDialog, HelpDialog, type ExportState } from './components/Dialogs';
 import { ExportPanel } from './components/ExportPanel';
@@ -40,6 +40,7 @@ export default function App() {
   } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
   const restored = useRef(false);
   const [ready, setReady] = useState(false);
 
@@ -64,6 +65,17 @@ export default function App() {
     setToast(message);
     setTimeout(() => setToast((current) => (current === message ? null : current)), 4000);
   }, []);
+
+  useEffect(() => {
+    void api.updateStatus().then(setUpdate);
+    return api.onUpdateStatus(setUpdate);
+  }, []);
+
+  const restartToUpdate = async () => {
+    // Make sure the restored session after the restart has the latest edits.
+    await api.autosave(history.ref.current, projectPath);
+    await api.installUpdate().catch((error: unknown) => showToast(error instanceof Error ? error.message.replace(/^.*Error: /, '') : String(error)));
+  };
 
   /** Analyse files (cached on disk after the first time) and keep their info and loudness envelopes. */
   const analyzePaths = useCallback(async (paths: string[]) => {
@@ -385,6 +397,16 @@ export default function App() {
           <button className="ghost icon" onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">↶</button>
           <button className="ghost icon" onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Y)">↷</button>
           <span className="divider" />
+          {update.state === 'ready' ? (
+            <button className="secondary" onClick={() => void restartToUpdate()} disabled={exportState?.status === 'running'} title="Your project is kept and reopens after the restart">
+              Restart to update to {update.version}
+            </button>
+          ) : null}
+          {update.state === 'available' ? (
+            <button className="secondary" onClick={() => void api.openRelease()} title="Download the new version from GitHub">
+              Version {update.version} is out
+            </button>
+          ) : null}
           <button className="ghost" onClick={() => setHelpOpen(true)}>Help</button>
           <button onClick={() => setTab('export')} disabled={!project.cameras.length}>Export</button>
         </div>

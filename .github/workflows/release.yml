@@ -37,4 +37,6 @@ jobs:
           files: |
             release/Cutcast.Setup.${{ steps.version.outputs.version }}.exe
             release/Cutcast.${{ steps.version.outputs.version }}.exe
+            release/Cutcast.Setup.${{ steps.version.outputs.version }}.exe.blockmap
+            release/latest.yml
           fail_on_unmatched_files: true
