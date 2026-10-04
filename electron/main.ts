@@ -6,6 +6,7 @@ import type { ExportRequest, Project } from '../src/shared/types';
 import { CancelledError } from './ffmpeg';
 import { ExportJob } from './exporter';
 import { analyzeMedia, detectEncoders } from './media';
+import { installUpdate, startUpdater, updateStatus } from './updater';
 
 const MEDIA_EXTENSIONS = ['mp4', 'mov', 'mkv', 'webm', 'm4v', 'avi', 'mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'aif', 'aiff'];
 const PROJECT_EXTENSION = 'cutcast';
@@ -196,12 +197,27 @@ function registerIpc() {
   ipcMain.handle('export:cancel', () => currentExport?.cancel());
 
   ipcMain.handle('shell:showItem', (_event, filePath: string) => shell.showItemInFolder(filePath));
+
+  ipcMain.handle('update:status', () => updateStatus());
+  ipcMain.handle('update:install', () => {
+    if (currentExport) {
+      throw new Error('Wait for the export to finish before restarting.');
+    }
+    installUpdate();
+  });
+  ipcMain.handle('update:openRelease', () => {
+    const status = updateStatus();
+    if (status.state === 'available') {
+      void shell.openExternal(status.url);
+    }
+  });
 }
 
 app.whenReady().then(() => {
   protocol.handle('media', handleMediaRequest);
   registerIpc();
   createWindow();
+  startUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
