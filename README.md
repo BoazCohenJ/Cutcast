@@ -33,7 +33,8 @@ Get the latest version from the **[Releases page](https://github.com/BoazCohenJ/
 ## Features
 
 - **Automatic sync.** Cameras and mics can start recording at different times; they're lined up by matching their
-  audio, accurate to a fraction of a frame. Doubtful matches are flagged so you can check them by ear.
+  audio, accurate to a fraction of a frame. On long recordings, devices whose clocks run slightly fast or slow are
+  corrected too, so the lips still match at the end. Doubtful matches are flagged so you can check them by ear.
 - **Cuts to whoever is talking.** Each mic is linked to that person's close-up camera. Quiet pickup of one person on
   another's mic (bleed) is ignored, and mics recorded at different volumes are handled.
 - **Wide-shot logic.** Goes wide when people talk over each other or after a pause, and drops short wide cutaways

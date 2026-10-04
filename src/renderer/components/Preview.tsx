@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { type Project, type Shot, type Track } from '../../shared/types';
+import { toLocal, toTimeline, type Project, type Shot, type Track } from '../../shared/types';
 import { dbToGain, formatTime, mediaUrl } from '../lib/util';
 
 type Props = {
@@ -37,7 +37,10 @@ export function shotAt(shots: Shot[], time: number) {
   return -1;
 }
 
-const localTime = (track: Track, time: number) => time - track.offsetSec;
+/** While playing, elements further than this from the clock are seeked; closer ones are nudged by playback speed. */
+const SEEK_TOLERANCE = 0.25;
+
+const localTime = toLocal;
 const inRange = (track: Track, time: number) => {
   const local = localTime(track, time);
   return local >= 0 && local < (track.info?.durationSec ?? 0) - 0.05;
@@ -90,9 +93,17 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
         continue;
       }
       const target = localTime(track, time);
-      const tolerance = isPlaying ? (element instanceof HTMLVideoElement ? 0.12 : 0.2) : 0.01;
-      if (Math.abs(element.currentTime - target) > tolerance) {
-        element.currentTime = target;
+      const drift = element.currentTime - target;
+      if (!isPlaying || Math.abs(drift) > SEEK_TOLERANCE) {
+        if (Math.abs(drift) > 0.01) {
+          element.currentTime = target;
+        }
+        element.playbackRate = track.rate ?? 1;
+      } else {
+        // Small drift: speed up or slow down slightly to catch up smoothly, so lips stay on the sound without the
+        // stutter a seek causes.
+        const nudge = Math.abs(drift) < 0.01 ? 1 : 1 - Math.max(-0.1, Math.min(0.1, drift * 2));
+        element.playbackRate = (track.rate ?? 1) * nudge;
       }
       if (isPlaying && element.paused) {
         void element.play().catch(() => undefined);
@@ -133,7 +144,7 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
       const master = mics.current.find((mic) => !mic.muted && inRange(mic, time));
       const masterElement = master ? elements.current.get(master.id) : undefined;
       if (master && masterElement && !masterElement.paused && !masterElement.seeking && masterElement.readyState >= 3) {
-        const masterTime = masterElement.currentTime + master.offsetSec;
+        const masterTime = toTimeline(master, masterElement.currentTime);
         // Trust the mic unless it's wildly off (e.g. it just started).
         if (Math.abs(masterTime - time) < 0.3) {
           time = masterTime;

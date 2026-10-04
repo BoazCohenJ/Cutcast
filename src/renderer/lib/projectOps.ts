@@ -1,4 +1,4 @@
-import { findOffset } from '../../shared/sync';
+import { findOffset, measureDrift } from '../../shared/sync';
 import { envelopeOf, type Camera, type MediaAnalysis, type MediaInfo, type Mic, type OutputSettings, type Project, type Track } from '../../shared/types';
 import { CAMERA_COLORS, createId, fileName, stripExtension } from './util';
 
@@ -137,10 +137,15 @@ export function autoSync(project: Project, analyses: Analyses, onlyIds?: Readonl
       return track;
     }
     if (track.path === reference.path) {
-      return { ...track, offsetSec: reference.offsetSec, syncConfidence: undefined };
+      return { ...track, offsetSec: reference.offsetSec, rate: reference.rate, syncConfidence: undefined };
     }
     const result = findOffset(referenceEnvelope, own);
-    return { ...track, offsetSec: reference.offsetSec + result.offsetSec, syncConfidence: result.confidence };
+    // Times below are in the reference file's own seconds; convert them to the timeline through its clock rate.
+    const referenceRate = reference.rate ?? 1;
+    const drift = measureDrift(referenceEnvelope, own, result.offsetSec);
+    const offsetSec = reference.offsetSec + (drift?.offsetSec ?? result.offsetSec) / referenceRate;
+    const rate = drift ? drift.rate * referenceRate : reference.rate;
+    return { ...track, offsetSec, rate: rate === 1 ? undefined : rate, syncConfidence: result.confidence };
   };
 
   return normalizeOffsets({ ...project, cameras: project.cameras.map(sync), mics: project.mics.map(sync) });

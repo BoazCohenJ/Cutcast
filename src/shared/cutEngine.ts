@@ -1,4 +1,4 @@
-import { ENVELOPE_RATE, type Camera, type Mic, type Project, type Shot, timelineDuration, trackEnd } from './types';
+import { ENVELOPE_RATE, type Camera, type Mic, type Project, type Shot, type Track, timelineDuration, toLocal, trackEnd } from './types';
 
 /** Decisions are made on a 10 Hz grid. */
 export const STEP_SEC = 0.1;
@@ -25,12 +25,12 @@ function percentile(values: number[], p: number) {
 }
 
 /** Resample one mic's envelope onto the timeline grid in dB. */
-export function micLoudness(envelope: Float32Array, offsetSec: number, steps: number) {
+export function micLoudness(envelope: Float32Array, track: Track, steps: number) {
   const db = new Float32Array(steps).fill(NaN);
   const perStep = ENVELOPE_RATE * STEP_SEC;
 
   for (let step = 0; step < steps; step += 1) {
-    const from = Math.round((step * STEP_SEC - offsetSec) * ENVELOPE_RATE);
+    const from = Math.round(toLocal(track, step * STEP_SEC) * ENVELOPE_RATE);
     const to = from + perStep;
     if (to <= 0 || from >= envelope.length) {
       continue;
@@ -52,7 +52,7 @@ const MAX_GAIN_SPREAD_DB = 6;
 
 function analyzeMics(mics: Mic[], envelopes: Envelopes, steps: number, sensitivity: number): MicActivity[] {
   const measured = mics.map((mic) => {
-    const db = micLoudness(envelopes.get(mic.id)!, mic.offsetSec, steps);
+    const db = micLoudness(envelopes.get(mic.id)!, mic, steps);
     const valid = Array.from(db).filter((value) => !Number.isNaN(value));
     // Low percentile for the floor: even a non-stop talker has breaths and gaps between words.
     return { mic, db, floor: percentile(valid, 0.05), speech: percentile(valid, 0.99) };
