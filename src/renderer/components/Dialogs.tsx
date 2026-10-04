@@ -84,7 +84,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
       <div className="modal wide" onClick={(event) => event.stopPropagation()}>
         <h2>How it works</h2>
         <ol className="steps">
-          <li><strong>Drop in all your files</strong>: every camera video and every microphone recording. The app sorts them and lines them up by their sound.</li>
+          <li><strong>Drop in all your files</strong>: every camera video and every microphone recording. The app sorts them and lines them up by their sound. Use Add video or Add audio to take only a file’s picture or only its sound.</li>
           <li><strong>Check who’s who.</strong> Each mic should point at the camera that films that person. Set your wide camera to “Wide shot”.</li>
           <li><strong>Press play.</strong> The preview switches cameras the way the export will. Don’t like a shot? Press a camera number to lock it.</li>
           <li><strong>Export.</strong> Every mic plays the whole time; only the picture changes.</li>
@@ -129,9 +129,7 @@ export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: strin
                 {track.layout ? <span className="muted small">{track.layout}</span> : null}
               </label>
             ))}
-            <div className="muted small">
-              {analysis.hasVideo ? 'Untick them all to use this camera’s own sound instead.' : 'Untick them all to leave this file out.'}
-            </div>
+            <div className="muted small">Untick them all to leave this file out.</div>
           </div>
         ))}
         <div className="modal-actions">

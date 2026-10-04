@@ -7,7 +7,8 @@ type Props = {
   importing: Record<string, number>;
   errors: Record<string, string>;
   syncing: boolean;
-  onAddFiles: () => void;
+  onAddVideo: () => void;
+  onAddAudio: () => void;
   onAutoSync: () => void;
   onUpdate: (id: string, patch: Partial<Camera> & Partial<Mic>) => void;
   onRemove: (id: string) => void;
@@ -29,10 +30,12 @@ function TrackDetails({ track, error, onRelink }: { track: Track; error?: string
   if (info && audioTrack !== undefined && (info.audioTracks?.length ?? 0) > 1) {
     parts.push(audioTrackName(info, audioTrack));
   }
-  if (info?.width && info.height) {
+  // A mic taken from a video file only uses its sound, so its picture details don't apply.
+  const isCamera = 'role' in track;
+  if (isCamera && info?.width && info.height) {
     parts.push(`${info.width}×${info.height}`);
   }
-  if (info?.fps) {
+  if (isCamera && info?.fps) {
     parts.push(`${Math.round(info.fps * 100) / 100} fps`);
   }
   if (info) {
@@ -65,7 +68,7 @@ function OffsetControl({ track, onUpdate }: { track: Track; onUpdate: Props['onU
   );
 }
 
-export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, onAutoSync, onUpdate, onRemove, onRelink }: Props) {
+export function SourcesPanel({ project, importing, errors, syncing, onAddVideo, onAddAudio, onAutoSync, onUpdate, onRemove, onRelink }: Props) {
   const importingPaths = Object.keys(importing);
   const heardId = soundSources(project).find((source) => !source.muted)?.path;
   const heardCamera = project.mics.length ? undefined : project.cameras.find((camera) => camera.path === heardId);
@@ -74,7 +77,8 @@ export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, 
   return (
     <div className="panel-body">
       <div className="button-row">
-        <button onClick={onAddFiles}>Add files…</button>
+        <button onClick={onAddVideo} title="Use only the picture of these files, as cameras">Add video…</button>
+        <button onClick={onAddAudio} title="Use only the sound of these files, as microphones">Add audio…</button>
         <button className="secondary" onClick={onAutoSync} disabled={trackCount < 2 || syncing}>
           {syncing ? 'Syncing…' : 'Auto-sync'}
         </button>
@@ -88,7 +92,7 @@ export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, 
       ))}
 
       <h3>Cameras</h3>
-      {!project.cameras.length ? <p className="muted small">No cameras yet. Add your video files.</p> : null}
+      {!project.cameras.length ? <p className="muted small">No cameras yet. Use Add video to add your camera files.</p> : null}
       {project.cameras.map((camera, index) => (
         <div className="track-card" key={camera.id}>
           <div className="track-title">
@@ -114,7 +118,7 @@ export function SourcesPanel({ project, importing, errors, syncing, onAddFiles, 
             person’s mic recording.
           </p>
         ) : (
-          <p className="muted small">No microphones yet. Add each person’s audio file.</p>
+          <p className="muted small">No microphones yet. Use Add audio for each person’s mic. A video file works too: only its sound is used.</p>
         )
       ) : null}
       {project.mics.map((mic) => (

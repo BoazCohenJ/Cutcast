@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emptyProject, ENVELOPE_RATE, type MediaAnalysis } from '../../shared/types';
-import { addFiles, autoSync } from './projectOps';
+import { emptyProject, ENVELOPE_RATE, soundSources, type MediaAnalysis } from '../../shared/types';
+import { addFiles, autoSync, importedPaths } from './projectOps';
 
 /** Bursts of loudness at pseudo-random times, so two copies can only line up one way. */
 function speech(seconds: number, seed: number) {
@@ -24,23 +24,46 @@ const analysis = (hasVideo: boolean, envelopes: Float32Array[], titles: string[]
   envelopes
 });
 
-describe('files with several audio tracks', () => {
-  it('turns each picked track into its own mic', () => {
-    const file = { path: 'show.mp4', analysis: analysis(true, [speech(60, 1), speech(60, 2)], ['Host']) };
-    const project = addFiles(emptyProject(), [file], new Map([['show.mp4', [0, 1]]]));
+describe('adding video and audio separately', () => {
+  // Two cameras with their own built-in mics, and one blank-picture MP4 carrying a clean mic per person.
+  const camA = { path: 'camA.mp4', analysis: analysis(true, [speech(60, 1)]) };
+  const camB = { path: 'camB.mp4', analysis: analysis(true, [speech(60, 2)]) };
+  const recorder = { path: 'mics.mp4', analysis: analysis(true, [speech(60, 3), speech(60, 4)], ['Host']) };
 
-    expect(project.cameras.map((camera) => camera.path)).toEqual(['show.mp4']);
+  it('takes only the picture as video and only the picked tracks as audio', () => {
+    const withVideo = addFiles(emptyProject(), [camA, camB], 'video');
+    const project = addFiles(withVideo, [recorder], 'audio', new Map([['mics.mp4', [0, 1]]]));
+
+    expect(project.cameras.map((camera) => camera.path)).toEqual(['camA.mp4', 'camB.mp4']);
     expect(project.mics.map(({ path, name, audioTrack }) => ({ path, name, audioTrack }))).toEqual([
-      { path: 'show.mp4', name: 'show Track 1 (Host)', audioTrack: 0 },
-      { path: 'show.mp4', name: 'show Track 2', audioTrack: 1 }
+      { path: 'mics.mp4', name: 'mics Track 1 (Host)', audioTrack: 0 },
+      { path: 'mics.mp4', name: 'mics Track 2', audioTrack: 1 }
     ]);
-    expect(project.mics[0].cameraId).toBe(project.cameras[0].id);
+    // Each mic shows its own camera, and only the mics are heard, not the cameras' built-in sound.
+    expect(project.mics.map((mic) => mic.cameraId)).toEqual(project.cameras.map((camera) => camera.id));
+    expect(soundSources(project).map((source) => source.path)).toEqual(['mics.mp4', 'mics.mp4']);
   });
 
-  it('adds no mic from a video unless tracks were picked, and the first track of an audio file', () => {
-    const video = { path: 'cam.mp4', analysis: analysis(true, [speech(60, 1)]) };
-    const audio = { path: 'mic.wav', analysis: analysis(false, [speech(60, 2)]) };
-    const project = addFiles(emptyProject(), [video, audio]);
+  it('links mics to cameras whichever is added first', () => {
+    const withAudio = addFiles(emptyProject(), [recorder], 'audio', new Map([['mics.mp4', [0, 1]]]));
+    expect(withAudio.cameras).toEqual([]);
+    const project = addFiles(withAudio, [camA, camB], 'video');
+    expect(project.mics.map((mic) => mic.cameraId)).toEqual(project.cameras.map((camera) => camera.id));
+  });
+
+  it('lets one file be both a camera and a mic, but not the same one twice', () => {
+    const project = addFiles(emptyProject(), [camA], 'video');
+    expect(importedPaths(project, 'video').has('camA.mp4')).toBe(true);
+    expect(importedPaths(project, 'audio').has('camA.mp4')).toBe(false);
+    const both = addFiles(project, [camA], 'audio');
+    expect(both.mics.map(({ path, audioTrack }) => ({ path, audioTrack }))).toEqual([{ path: 'camA.mp4', audioTrack: 0 }]);
+    expect(both.cameras).toHaveLength(1);
+  });
+
+  it('sorts dropped files: video files become cameras, audio files mics', () => {
+    const wav = { path: 'mic.wav', analysis: analysis(false, [speech(60, 5)]) };
+    const project = addFiles(emptyProject(), [camA, wav]);
+    expect(project.cameras.map((camera) => camera.path)).toEqual(['camA.mp4']);
     expect(project.mics.map(({ path, name, audioTrack }) => ({ path, name, audioTrack }))).toEqual([{ path: 'mic.wav', name: 'mic', audioTrack: 0 }]);
   });
 
@@ -50,7 +73,7 @@ describe('files with several audio tracks', () => {
     const camera = guest.slice(3 * ENVELOPE_RATE);
     const recorder = { path: 'recorder.wav', analysis: analysis(false, [speech(120, 9), guest]) };
     const cam = { path: 'cam.mp4', analysis: analysis(true, [camera]) };
-    const added = addFiles(emptyProject(), [recorder, cam], new Map([['recorder.wav', [1]]]));
+    const added = addFiles(emptyProject(), [recorder, cam], 'auto', new Map([['recorder.wav', [1]]]));
     const synced = autoSync(added, new Map([[recorder.path, recorder.analysis], [cam.path, cam.analysis]]));
 
     expect(synced.mics[0].offsetSec).toBe(0);

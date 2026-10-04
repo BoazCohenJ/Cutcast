@@ -16,13 +16,28 @@ export const audioTrackName = (info: MediaInfo, audioTrack: number) => {
 };
 
 /**
+ * What to take from imported files: 'video' adds only the picture (a camera), 'audio' adds only the sound (mics, even
+ * from a video file), and 'auto' (drag and drop) makes video files cameras and audio files mics.
+ */
+export type ImportKind = 'video' | 'audio' | 'auto';
+
+export const takesVideo = (analysis: MediaAnalysis, kind: ImportKind) => kind !== 'audio' && analysis.hasVideo;
+export const takesAudio = (analysis: MediaAnalysis, kind: ImportKind) =>
+  analysis.hasAudio && (kind === 'audio' || (kind === 'auto' && !analysis.hasVideo));
+
+/** The tracks a new file of this kind would duplicate: a file can be one camera and one set of mics, not two. */
+export const importedPaths = (project: Project, kind: ImportKind) =>
+  new Set((kind === 'video' ? project.cameras : kind === 'audio' ? project.mics : allTracks(project)).map((track) => track.path));
+
+/**
  * Sort new files into cameras and mics, and wire each mic to a close-up camera.
- * `micTracks` says which audio tracks of a multi-track file become mics (one mic each); without a choice, a video
- * file adds no mic and an audio file adds its first track.
+ * `micTracks` says which audio tracks of a multi-track file become mics (one mic each); without a choice, a file
+ * taken as audio adds its first track.
  */
 export function addFiles(
   project: Project,
   files: Array<{ path: string; analysis: MediaAnalysis }>,
+  kind: ImportKind = 'auto',
   micTracks: ReadonlyMap<string, number[]> = new Map()
 ): Project {
   const cameras = [...project.cameras];
@@ -30,7 +45,7 @@ export function addFiles(
 
   for (const { path, analysis } of files) {
     const name = stripExtension(fileName(path));
-    if (analysis.hasVideo) {
+    if (takesVideo(analysis, kind)) {
       const speakerCount = cameras.filter((camera) => camera.role === 'speaker').length;
       const looksWide = /wide|master|group|all/i.test(name);
       const hasWide = cameras.some((camera) => camera.role === 'wide');
@@ -45,7 +60,7 @@ export function addFiles(
         color: CAMERA_COLORS[cameras.length % CAMERA_COLORS.length]
       });
     }
-    const tracks = micTracks.get(path) ?? (!analysis.hasVideo && analysis.hasAudio ? [0] : []);
+    const tracks = takesAudio(analysis, kind) ? (micTracks.get(path) ?? [0]) : [];
     for (const audioTrack of tracks) {
       const info = infoOf(analysis);
       const micName = hasSeveralAudioTracks(analysis) ? `${name} ${audioTrackName(info, audioTrack)}` : name;
