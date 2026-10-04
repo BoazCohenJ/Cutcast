@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { planShots } from '../shared/cutEngine';
-import { emptyProject, envelopeOf, exportRange, soundSources, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
+import { emptyProject, envelopeOf, exportRange, timelineDuration, type MediaAnalysis, type Project, type Track } from '../shared/types';
 import { CutPanel } from './components/CutPanel';
 import { AudioTrackDialog, ExportDialog, HelpDialog, type ExportState } from './components/Dialogs';
 import { ExportPanel } from './components/ExportPanel';
@@ -48,14 +48,14 @@ export default function App() {
 
   const micEnvelopes = useMemo(() => {
     const map = new Map<string, Float32Array>();
-    for (const mic of soundSources(project)) {
+    for (const mic of project.mics) {
       const envelope = envelopeOf(analyses.get(mic.path), mic.audioTrack);
       if (envelope?.length) {
         map.set(mic.id, envelope);
       }
     }
     return map;
-  }, [project.mics, project.cameras, analyses]);
+  }, [project.mics, analyses]);
 
   const shots = useMemo(() => planShots(project, micEnvelopes), [project, micEnvelopes]);
   const currentShot = shotAt(shots, Math.min(playhead, Math.max(0, duration - 1e-3)));

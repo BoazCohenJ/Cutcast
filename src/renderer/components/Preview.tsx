@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { soundSources, type Project, type Shot, type Track } from '../../shared/types';
+import { type Project, type Shot, type Track } from '../../shared/types';
 import { dbToGain, formatTime, mediaUrl } from '../lib/util';
 
 type Props = {
@@ -60,7 +60,8 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
   const clock = useRef({ wall: 0, time: 0 });
   const [failed, setFailed] = useState<Record<string, boolean>>({});
 
-  const sources = soundSources(project);
+  // Only mics are heard: cameras play muted, their own sound is only used to line the files up.
+  const sources = project.mics;
   const tracks: Track[] = [...project.cameras, ...sources];
   const tracksRef = useRef(tracks);
   tracksRef.current = tracks;
@@ -169,7 +170,13 @@ export function Preview({ project, shots, duration, playhead, playing, onTime, o
         {project.cameras.map((camera) => (
           <video
             key={camera.id}
-            ref={register(camera.id)}
+            ref={(element) => {
+              register(camera.id)(element);
+              if (element) {
+                // Cameras are picture only; set it on the element too, since React doesn't always apply the attribute.
+                element.muted = true;
+              }
+            }}
             src={mediaUrl(camera.path)}
             className={camera.id === activeCamera?.id && cameraVisible ? 'visible' : ''}
             muted
