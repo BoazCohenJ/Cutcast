@@ -21,9 +21,10 @@ export const audioTrackName = (info: MediaInfo, audioTrack: number) => {
  */
 export type ImportKind = 'video' | 'audio' | 'auto';
 
-export const takesVideo = (analysis: MediaAnalysis, kind: ImportKind) => kind !== 'audio' && analysis.hasVideo;
+export const takesVideo = (analysis: MediaAnalysis, kind: ImportKind) => kind !== 'audio' && analysis.hasVideo && !analysis.blankPicture;
+// A black placeholder picture means the file is really just a recording: take it as audio even when dropped in.
 export const takesAudio = (analysis: MediaAnalysis, kind: ImportKind) =>
-  analysis.hasAudio && (kind === 'audio' || (kind === 'auto' && !analysis.hasVideo));
+  analysis.hasAudio && (kind === 'audio' || (kind === 'auto' && (!analysis.hasVideo || Boolean(analysis.blankPicture))));
 
 /** The tracks a new file of this kind would duplicate: a file can be one camera and one set of mics, not two. */
 export const importedPaths = (project: Project, kind: ImportKind) =>

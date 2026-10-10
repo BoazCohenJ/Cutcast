@@ -6,7 +6,7 @@ import { ENVELOPE_RATE, type MediaAnalysis, type MediaInfo } from '../src/shared
 import { ffmpegPath, runFfmpeg } from './ffmpeg';
 
 const ANALYSIS_SAMPLE_RATE = 8000;
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 /** Read duration and stream details from ffmpeg's banner (ffmpeg-static ships without ffprobe). */
 export async function probeMedia(inputPath: string): Promise<MediaInfo> {
@@ -72,6 +72,30 @@ function audioTracksOf(output: string) {
   }
   flush();
   return tracks;
+}
+
+/** True when the picture is flat black at a few sampled points, rather than a real camera. */
+async function hasBlackPicture(inputPath: string, durationSec: number) {
+  for (const fraction of [0.1, 0.5, 0.9]) {
+    const child = spawn(
+      ffmpegPath(),
+      ['-hide_banner', '-ss', (durationSec * fraction).toFixed(2), '-i', inputPath, '-map', '0:v:0', '-frames:v', '1', '-vf', 'signalstats,metadata=print', '-an', '-f', 'null', '-'],
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+    );
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    await new Promise<void>((resolve) => {
+      child.once('error', () => resolve());
+      child.once('close', () => resolve());
+    });
+    const brightest = output.match(/lavfi\.signalstats\.YMAX=(\d+)/);
+    // Limited-range black is 16; leave a little room for encoder noise.
+    if (!brightest || Number(brightest[1]) > 24) {
+      return false;
+    }
+  }
+  return true;
 }
 
 async function cacheFile(cacheDir: string, inputPath: string) {
@@ -155,6 +179,9 @@ export async function analyzeMedia(inputPath: string, cacheDir: string, onProgre
   }
 
   const info = await probeMedia(inputPath);
+  if (info.hasVideo && info.hasAudio && (await hasBlackPicture(inputPath, info.durationSec))) {
+    info.blankPicture = true;
+  }
   const trackCount = info.audioTracks?.length ?? 0;
   const envelopes: Float32Array[] = [];
   for (let track = 0; track < trackCount; track += 1) {

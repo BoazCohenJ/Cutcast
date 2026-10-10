@@ -7,6 +7,8 @@ export type MediaInfo = {
   durationSec: number;
   hasVideo: boolean;
   hasAudio: boolean;
+  /** The picture is flat black, a placeholder that multitrack recorders put beside the audio. Not a real camera. */
+  blankPicture?: boolean;
   /** The file's audio tracks: the title the recorder gave each one, and its channel layout. Missing in older projects. */
   audioTracks?: Array<{ title?: string; layout?: string }>;
   width?: number;
@@ -18,6 +20,10 @@ export type MediaAnalysis = MediaInfo & {
   /** Linear RMS (0..1) of each of the file's audio tracks, ENVELOPE_RATE values per second. */
   envelopes: Float32Array[];
 };
+
+/** Peak level below which an audio track counts as silent (an unused recorder input). */
+const SILENT_PEAK = 1e-4;
+export const isSilentEnvelope = (envelope: Float32Array | undefined) => !envelope || envelope.every((value) => value < SILENT_PEAK);
 
 /** Loudness envelope of one audio track of an analysed file (the first track by default). */
 export const envelopeOf = (analysis: MediaAnalysis | undefined, audioTrack = 0) => analysis?.envelopes[audioTrack];
