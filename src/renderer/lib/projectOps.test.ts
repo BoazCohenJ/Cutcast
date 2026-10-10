@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyProject, ENVELOPE_RATE, type MediaAnalysis } from '../../shared/types';
+import { emptyProject, ENVELOPE_RATE, isSilentEnvelope, type MediaAnalysis } from '../../shared/types';
 import { addFiles, autoSync, importedPaths } from './projectOps';
 
 /** Bursts of loudness at pseudo-random times, so two copies can only line up one way. */
@@ -77,5 +77,25 @@ describe('adding video and audio separately', () => {
 
     expect(synced.mics[0].offsetSec).toBe(0);
     expect(synced.cameras[0].offsetSec).toBeCloseTo(3, 1);
+  });
+});
+
+describe('recorder files with a black placeholder picture', () => {
+  const recorder = { path: 'mics.mp4', analysis: { ...analysis(true, [speech(60, 3), speech(60, 4)]), blankPicture: true } };
+
+  it('is taken as audio, not as a black camera, when dropped in', () => {
+    const project = addFiles(emptyProject(), [recorder], 'auto', new Map([['mics.mp4', [0, 1]]]));
+    expect(project.cameras).toEqual([]);
+    expect(project.mics.map((mic) => mic.audioTrack)).toEqual([0, 1]);
+  });
+
+  it('never adds its black picture as a camera', () => {
+    expect(addFiles(emptyProject(), [recorder], 'video').cameras).toEqual([]);
+  });
+
+  it('tells silent tracks from tracks with sound', () => {
+    expect(isSilentEnvelope(new Float32Array(1000))).toBe(true);
+    expect(isSilentEnvelope(speech(10, 1))).toBe(false);
+    expect(isSilentEnvelope(undefined)).toBe(true);
   });
 });

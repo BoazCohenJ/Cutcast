@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ExportProgress, MediaAnalysis } from '../../shared/types';
+import { isSilentEnvelope, type ExportProgress, type MediaAnalysis } from '../../shared/types';
 import { audioTrackName } from '../lib/projectOps';
 import { fileName } from '../lib/util';
 
@@ -107,7 +107,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
 
 /** Asked on import for files that carry several audio tracks (e.g. one per mic): which tracks become mics. */
 export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: string; analysis: MediaAnalysis }>; onDone: (micTracks: Map<string, number[]>) => void }) {
-  const [picked, setPicked] = useState(() => new Map(files.map(({ path, analysis }) => [path, (analysis.audioTracks ?? []).map((_, index) => index)])));
+  const [picked, setPicked] = useState(() => new Map(files.map(({ path, analysis }) => [path, (analysis.audioTracks ?? []).map((_, index) => index).filter((index) => !isSilentEnvelope(analysis.envelopes[index]))])));
   const toggle = (path: string, track: number, on: boolean) =>
     setPicked((current) => {
       const others = (current.get(path) ?? []).filter((item) => item !== track);
@@ -127,6 +127,7 @@ export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: strin
                 <input type="checkbox" checked={picked.get(path)?.includes(index) ?? false} onChange={(event) => toggle(path, index, event.target.checked)} />
                 {audioTrackName(analysis, index)}
                 {track.layout ? <span className="muted small">{track.layout}</span> : null}
+                {isSilentEnvelope(analysis.envelopes[index]) ? <span className="muted small">silent</span> : null}
               </label>
             ))}
             <div className="muted small">Untick them all to leave this file out.</div>
