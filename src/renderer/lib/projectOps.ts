@@ -26,9 +26,26 @@ export const takesVideo = (analysis: MediaAnalysis, kind: ImportKind) => kind !=
 export const takesAudio = (analysis: MediaAnalysis, kind: ImportKind) =>
   analysis.hasAudio && (kind === 'audio' || (kind === 'auto' && (!analysis.hasVideo || Boolean(analysis.blankPicture))));
 
-/** The tracks a new file of this kind would duplicate: a file can be one camera and one set of mics, not two. */
-export const importedPaths = (project: Project, kind: ImportKind) =>
-  new Set((kind === 'video' ? project.cameras : kind === 'audio' ? project.mics : allTracks(project)).map((track) => track.path));
+/** The audio tracks of a file that are already mics. */
+export const usedAudioTracks = (project: Project, path: string) =>
+  project.mics.filter((mic) => mic.path === path).map((mic) => mic.audioTrack ?? 0);
+
+/** A file already used for some of its audio tracks, with more tracks left to add as mics. */
+const hasUnusedAudioTracks = (project: Project, path: string, analysis: MediaAnalysis | undefined) => {
+  const used = new Set(usedAudioTracks(project, path));
+  return used.size > 0 && (analysis?.audioTracks?.length ?? 0) > used.size;
+};
+
+/**
+ * The files a new import of this kind would duplicate: a file can be one camera and one set of mics, not two. A
+ * multi-track file stays open for audio until each of its tracks is a mic, so the rest can be added later.
+ */
+export const importedPaths = (project: Project, kind: ImportKind, analyses: Analyses = new Map()) =>
+  new Set(
+    (kind === 'video' ? project.cameras : kind === 'audio' ? project.mics : allTracks(project))
+      .map((track) => track.path)
+      .filter((path) => kind === 'video' || !hasUnusedAudioTracks(project, path, analyses.get(path)))
+  );
 
 /**
  * Sort new files into cameras and mics, and wire each mic to a close-up camera.
@@ -46,7 +63,7 @@ export function addFiles(
 
   for (const { path, analysis } of files) {
     const name = stripExtension(fileName(path));
-    if (takesVideo(analysis, kind)) {
+    if (takesVideo(analysis, kind) && !project.cameras.some((camera) => camera.path === path)) {
       const speakerCount = cameras.filter((camera) => camera.role === 'speaker').length;
       const looksWide = /wide|master|group|all/i.test(name);
       const hasWide = cameras.some((camera) => camera.role === 'wide');
@@ -61,7 +78,10 @@ export function addFiles(
         color: CAMERA_COLORS[cameras.length % CAMERA_COLORS.length]
       });
     }
-    const tracks = takesAudio(analysis, kind) ? (micTracks.get(path) ?? [0]) : [];
+    // Never add a track that is already a mic; without a choice, take the first one that isn't.
+    const used = new Set(usedAudioTracks(project, path));
+    const firstFree = (analysis.audioTracks ?? [{}]).findIndex((_, index) => !used.has(index));
+    const tracks = takesAudio(analysis, kind) ? (micTracks.get(path) ?? (firstFree >= 0 ? [firstFree] : [])).filter((track) => !used.has(track)) : [];
     for (const audioTrack of tracks) {
       const info = infoOf(analysis);
       const micName = hasSeveralAudioTracks(analysis) ? `${name} ${audioTrackName(info, audioTrack)}` : name;

@@ -7,7 +7,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { Preview, shotAt } from './components/Preview';
 import { SourcesPanel } from './components/SourcesPanel';
 import { Timeline } from './components/Timeline';
-import { addFiles, allTracks, autoSync, hasSeveralAudioTracks, importedPaths, removeTrack, setOverride, takesAudio, takesVideo, updateTrack, type ImportKind } from './lib/projectOps';
+import { addFiles, allTracks, autoSync, hasSeveralAudioTracks, importedPaths, removeTrack, setOverride, takesAudio, takesVideo, updateTrack, usedAudioTracks, type ImportKind } from './lib/projectOps';
 import { useHistory } from './lib/useHistory';
 import { fileName, stripExtension } from './lib/util';
 
@@ -36,6 +36,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [trackChoice, setTrackChoice] = useState<{
     files: Array<{ path: string; analysis: MediaAnalysis }>;
+    used: Map<string, number[]>;
     resolve: (micTracks: Map<string, number[]>) => void;
   } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -108,7 +109,7 @@ export default function App() {
   }, [analyses]);
 
   const importFiles = useCallback(async (paths: string[], kind: ImportKind) => {
-    const known = importedPaths(history.ref.current, kind);
+    const known = importedPaths(history.ref.current, kind, analyses);
     const fresh = [...new Set(paths)].filter((path) => !known.has(path));
     if (!fresh.length) {
       return;
@@ -126,7 +127,9 @@ export default function App() {
     // A file can carry several mics as separate audio tracks: ask which ones to use.
     const several = ok.filter(({ analysis }) => takesAudio(analysis, kind) && hasSeveralAudioTracks(analysis));
     const micTracks = several.length
-      ? await new Promise<Map<string, number[]>>((resolve) => setTrackChoice({ files: several, resolve }))
+      ? await new Promise<Map<string, number[]>>((resolve) =>
+          setTrackChoice({ files: several, used: new Map(several.map(({ path }) => [path, usedAudioTracks(history.ref.current, path)])), resolve })
+        )
       : new Map<string, number[]>();
     setTrackChoice(null);
 
@@ -141,7 +144,7 @@ export default function App() {
     });
     setSyncing(false);
     setTab('sources');
-  }, [analyzePaths, history.ref, setProject, showToast]);
+  }, [analyses, analyzePaths, history.ref, setProject, showToast]);
 
   const loadProject = useCallback(async (next: Project, path: string | null, markSaved: boolean) => {
     history.reset(next);
@@ -518,7 +521,7 @@ export default function App() {
       {dragging ? <div className="drop-overlay">Drop to add files</div> : null}
       {toast ? <div className="toast">{toast}</div> : null}
       {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
-      {trackChoice ? <AudioTrackDialog files={trackChoice.files} onDone={trackChoice.resolve} /> : null}
+      {trackChoice ? <AudioTrackDialog files={trackChoice.files} used={trackChoice.used} onDone={trackChoice.resolve} /> : null}
       {exportState ? (
         <ExportDialog
           state={exportState}
