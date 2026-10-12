@@ -105,9 +105,29 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Asked on import for files that carry several audio tracks (e.g. one per mic): which tracks become mics. */
-export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: string; analysis: MediaAnalysis }>; onDone: (micTracks: Map<string, number[]>) => void }) {
-  const [picked, setPicked] = useState(() => new Map(files.map(({ path, analysis }) => [path, (analysis.audioTracks ?? []).map((_, index) => index).filter((index) => !isSilentEnvelope(analysis.envelopes[index]))])));
+/**
+ * Asked on import for files that carry several audio tracks (e.g. one per mic): which tracks become mics. Tracks that
+ * are already mics (`used`, when a file is added again) show as added and can't be picked twice.
+ */
+export function AudioTrackDialog({
+  files,
+  used,
+  onDone
+}: {
+  files: Array<{ path: string; analysis: MediaAnalysis }>;
+  used: ReadonlyMap<string, number[]>;
+  onDone: (micTracks: Map<string, number[]>) => void;
+}) {
+  const isUsed = (path: string, track: number) => used.get(path)?.includes(track) ?? false;
+  const [picked, setPicked] = useState(
+    () =>
+      new Map(
+        files.map(({ path, analysis }) => [
+          path,
+          (analysis.audioTracks ?? []).map((_, index) => index).filter((index) => !isUsed(path, index) && !isSilentEnvelope(analysis.envelopes[index]))
+        ])
+      )
+  );
   const toggle = (path: string, track: number, on: boolean) =>
     setPicked((current) => {
       const others = (current.get(path) ?? []).filter((item) => item !== track);
@@ -124,10 +144,16 @@ export function AudioTrackDialog({ files, onDone }: { files: Array<{ path: strin
             <h3>{fileName(path)}</h3>
             {(analysis.audioTracks ?? []).map((track, index) => (
               <label className="check" key={index}>
-                <input type="checkbox" checked={picked.get(path)?.includes(index) ?? false} onChange={(event) => toggle(path, index, event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={isUsed(path, index) || (picked.get(path)?.includes(index) ?? false)}
+                  disabled={isUsed(path, index)}
+                  onChange={(event) => toggle(path, index, event.target.checked)}
+                />
                 {audioTrackName(analysis, index)}
                 {track.layout ? <span className="muted small">{track.layout}</span> : null}
-                {isSilentEnvelope(analysis.envelopes[index]) ? <span className="muted small">silent</span> : null}
+                {isUsed(path, index) ? <span className="muted small">already added</span> : null}
+                {!isUsed(path, index) && isSilentEnvelope(analysis.envelopes[index]) ? <span className="muted small">silent</span> : null}
               </label>
             ))}
             <div className="muted small">Untick them all to leave this file out.</div>

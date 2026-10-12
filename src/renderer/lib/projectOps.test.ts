@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyProject, ENVELOPE_RATE, isSilentEnvelope, type MediaAnalysis } from '../../shared/types';
-import { addFiles, autoSync, importedPaths } from './projectOps';
+import { addFiles, autoSync, importedPaths, usedAudioTracks } from './projectOps';
 
 /** Bursts of loudness at pseudo-random times, so two copies can only line up one way. */
 function speech(seconds: number, seed: number) {
@@ -57,6 +57,25 @@ describe('adding video and audio separately', () => {
     const both = addFiles(project, [camA], 'audio');
     expect(both.mics.map(({ path, audioTrack }) => ({ path, audioTrack }))).toEqual([{ path: 'camA.mp4', audioTrack: 0 }]);
     expect(both.cameras).toHaveLength(1);
+  });
+
+  it('lets a multi-track file be added again for the tracks that are not mics yet', () => {
+    const files = new Map([[recorder.path, recorder.analysis]]);
+    const first = addFiles(emptyProject(), [recorder], 'audio', new Map([['mics.mp4', [0]]]));
+    expect(importedPaths(first, 'audio', files).has('mics.mp4')).toBe(false);
+    expect(usedAudioTracks(first, 'mics.mp4')).toEqual([0]);
+
+    // Picking a track that's already a mic again doesn't duplicate it.
+    const second = addFiles(first, [recorder], 'audio', new Map([['mics.mp4', [0, 1]]]));
+    expect(second.mics.map((mic) => mic.audioTrack)).toEqual([0, 1]);
+    expect(importedPaths(second, 'audio', files).has('mics.mp4')).toBe(true);
+
+    // Without a choice, the next free track is taken, and a camera isn't added twice.
+    const withCamera = addFiles(addFiles(emptyProject(), [recorder], 'video'), [recorder], 'audio');
+    const again = addFiles(withCamera, [recorder], 'auto');
+    expect(again.cameras).toHaveLength(1);
+    expect(again.mics.map((mic) => mic.audioTrack)).toEqual([0]);
+    expect(addFiles(withCamera, [recorder], 'audio').mics.map((mic) => mic.audioTrack)).toEqual([0, 1]);
   });
 
   it('sorts dropped files: video files become cameras, audio files mics', () => {
